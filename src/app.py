@@ -135,7 +135,7 @@ async def test_endpoint(request: MessageRequest):
         # Create the response using the MessageResponse model
         message_response = MessageResponse(
             query=request.message,
-            result=response_message.get("answer", "No answer available"),
+            result=response_message,
             userid=request.userid,
             sessionId=request.sessionId
         )
