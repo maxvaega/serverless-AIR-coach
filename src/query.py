@@ -20,6 +20,46 @@ PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
 PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME')
 PINECONE_NAMESPACE = os.getenv('PINECONE_NAMESPACE')
 
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small"
+)
+vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
+
+llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0,
+)
+
+system_prompt = """
+    Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul paracadutismo con risposte chiare ed esaurienti.
+
+    # Istruzioni Chiave
+    -   **Ambito delle risposte**: Rispondi solo a domande relative al paracadutismo. Se la risposta dipende da informazioni personali come il numero di salti o il possesso della licenza, chiedi all'utente di fornire tali dettagli.
+    -   **Sicurezza**: La sicurezza è sempre la priorità su tutto. Se l'utente chiede di qualcosa che non dovrebbe fare, spiegalo chiaramente.
+
+    # Stile e Tono
+    -   **Chiarezza e completezza**: Usa un linguaggio chiaro e fornisci tutti i dettagli di cui disponi.
+    -   **Tono rassicurante e stimolante**: Motiva e rassicura l'utente bilanciando la sicurezza con l'approccio divertente e positivo allo sport.
+
+    # Formato
+    Le risposte devono essere in linguaggio naturale, strutturate in paragrafi chiari e con eventuali elenchi puntati per procedure specifiche.
+
+    # Note
+
+    -   Non utilizzare mai le competenze generali del modello o fare inferenze al di fuori del contesto fornito
+    -   Incoraggia sempre a ripassare le procedure di sicurezza e proponiti per aiutare l'utente a farlo.
+    -   Ricorda di invitare l'utente a rivolgersi sempre a un istruttore di persona quando necessario.
+
+    Utilizza il contesto fornito di seguito per rispondere alla domanda.
+    Se non conosci la risposta, di semplicemente che non la conosci e suggerisci di chiedere a un istruttore 
+    Contesto: 
+    {context}
+    """
+
+#retrieval_qa_chat_prompt = hub.pull("langchain-ai/retrieval-qa-chat")
+# Combine query and system prompt
+messages = [("system", system_prompt)]
+
 def similar_docs(query, vectorstore, k=5):
     # Perform similarity search
     similar_docs = vectorstore.similarity_search(query, k=k)
@@ -49,45 +89,7 @@ def serialize_aimessagechunk(chunk):
         )
 
 def ask(query, chat_history=None, stream=False):
-    embeddings = OpenAIEmbeddings(
-       model="text-embedding-3-small"
-    )
-    vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
-    retriever = vectorstore.as_retriever(query=query, k=4)
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0,
-    )
 
-    system_prompt = """
-        Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul paracadutismo con risposte chiare ed esaurienti.
-
-        # Istruzioni Chiave
-        -   **Ambito delle risposte**: Rispondi solo a domande relative al paracadutismo. Se la risposta dipende da informazioni personali come il numero di salti o il possesso della licenza, chiedi all'utente di fornire tali dettagli.
-        -   **Sicurezza**: La sicurezza è sempre la priorità su tutto. Se l'utente chiede di qualcosa che non dovrebbe fare, spiegalo chiaramente.
-
-        # Stile e Tono
-        -   **Chiarezza e completezza**: Usa un linguaggio chiaro e fornisci tutti i dettagli di cui disponi.
-        -   **Tono rassicurante e stimolante**: Motiva e rassicura l'utente bilanciando la sicurezza con l'approccio divertente e positivo allo sport.
-
-        # Formato
-        Le risposte devono essere in linguaggio naturale, strutturate in paragrafi chiari e con eventuali elenchi puntati per procedure specifiche.
-
-        # Note
-
-        -   Non utilizzare mai le competenze generali del modello o fare inferenze al di fuori del contesto fornito
-        -   Incoraggia sempre a ripassare le procedure di sicurezza e proponiti per aiutare l'utente a farlo.
-        -   Ricorda di invitare l'utente a rivolgersi sempre a un istruttore di persona quando necessario.
-
-        Utilizza il contesto fornito di seguito per rispondere alla domanda.
-        Se non conosci la risposta, di semplicemente che non la conosci e suggerisci di chiedere a un istruttore 
-        Contesto: 
-        {context}
-        """
-
-    #retrieval_qa_chat_prompt = hub.pull("langchain-ai/retrieval-qa-chat")
-    # Combine query and system prompt
-    messages = [("system", system_prompt)]
     if chat_history != None:
         messages.extend(chat_history)
     messages.append(("human", query))
@@ -95,6 +97,8 @@ def ask(query, chat_history=None, stream=False):
     combine_docs_chain = create_stuff_documents_chain(
         llm, retrieval_qa_chat_prompt
     )
+
+    retriever = vectorstore.as_retriever(query=query, k=4)
     chain = create_retrieval_chain(retriever, combine_docs_chain)
     # Create a custom prompt template that includes the system prompt
     if not stream:
