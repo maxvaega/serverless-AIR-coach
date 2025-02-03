@@ -90,10 +90,13 @@ def serialize_aimessagechunk(chunk):
 
 def ask(query, chat_history=None, stream=False):
 
-    if chat_history != None:
-        messages.extend(chat_history)
-    messages.append(("human", query))
-    retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages(messages)
+    # if chat_history != None:
+    #     messages.extend(chat_history)
+    # messages.append(("human", query))
+    retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "{input}")
+    ])
     combine_docs_chain = create_stuff_documents_chain(
         llm, retrieval_qa_chat_prompt
     )
