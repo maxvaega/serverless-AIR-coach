@@ -62,7 +62,7 @@ async def query_endpoint(request: MessageRequest):
     try:
         logger.info("Processing Request")
 
-        response_message = ask(request.message) #, chat_history=chat_history)
+        response_message = ask(request.message, request.userid, stream=False) #, chat_history=chat_history)
         logger.info(f"Response: {response_message}")
 
         # Create the response using the MessageResponse model
