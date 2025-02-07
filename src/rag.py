@@ -4,7 +4,6 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
 from langchain_core.messages import AIMessageChunk
-from .database import insert_data
 from .logging_config import logger
 import datetime
 import os
@@ -27,7 +26,7 @@ ENV = os.getenv("ENV")
 
 # Setup MongoDB environment
 DATABASE_NAME = os.getenv("DATABASE_NAME")
-COLLECTION_NAME = ENV
+COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
 # Initialize system prompt
 system_prompt = """
@@ -97,8 +96,23 @@ def serialize_aimessagechunk(chunk):
         )
 
 def ask(query, user_id, chat_history=None, stream=False):
+    """
+    Processes a user query and returns a response, optionally streaming the response.
 
-    if chat_history != None:
+    This function uses a combination of retrieval and chain mechanisms to process the query
+    and generates a response. If chat history is provided, it extends the messages with the
+    chat history and appends the new query. The function supports both synchronous and
+    asynchronous streaming of responses. In streaming mode, it yields chunks of data and
+    inserts the final response into a MongoDB collection.
+
+    :param query: The user query to process.
+    :param user_id: The ID of the user making the query.
+    :param chat_history: Optional; A list of previous chat messages to include in the context.
+    :param stream: Optional; If True, streams the response asynchronously.
+    :return: The response to the query, either as a single result or a generator for streaming.
+    """
+
+    if chat_history:
         messages.extend(chat_history)
 
     messages.append(("human", query))
@@ -115,33 +129,45 @@ def ask(query, user_id, chat_history=None, stream=False):
     if not stream:
         return chain.invoke({"input": query})
     else:
-        response_array = []
+        from .database import insert_data
+        response_chunks = []
 
         # Stream the response
         async def stream_response():
-            async for chunk in chain.astream_events({"input": query}, version="v1"):
+            async for event in chain.astream_events(
+                {"input": query}, version="v2"
+            ):
                 try:
-                    #print(chunk["answer"], end="", flush=True)
-                    chunk_content = serialize_aimessagechunk(chunk["data"]["chunk"])
-                    response_array.append(chunk_content)
-                    if len(chunk_content) != 0:
-                        data_dict = {"data": chunk_content}
-                        data_json = json.dumps(data_dict)
-                        yield f"data: {data_json}\n\n"
-                except:
-                    pass
+                    # Catch events
+                    kind = event["event"]
+                    if kind == "on_chain_end":
+                        if event["name"] == "retrieve_documents":
+                            filenames = [document.metadata['filename'] for document in event['data']['output']]
+                            #print(f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}")
+                    if kind == "on_chat_model_stream":
+                        content = serialize_aimessagechunk(event["data"]["chunk"])
+                        response_chunks.append(content)
+                        if content:
+                            data_dict = {"data": content}
+                            data_json = json.dumps(data_dict)
+                            yield f"data: {data_json}\n\n"
 
-            response = "".join(response_array)
+                except Exception as e:
+                    logger.error(f"An error occurred while streaming the events: {e}")
+
+            response = "".join(response_chunks)
 
             # Insert the data into the MongoDB collection
             try:
-                insert_data(DATABASE_NAME, COLLECTION_NAME, {
+                data = {
                     "human": query,
                     "system": response,
                     "userid": user_id,
                     "env" : ENV,
+                    "filenames" : ','.join(filenames),
                     "timestamp" : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                })
+                }
+                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
                 logger.info(f"Data inserted into the collection: {COLLECTION_NAME}")
             except Exception as e:
                 logger.error(f"An error occurred while inserting the data into the collection: {e}")

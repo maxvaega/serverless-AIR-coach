@@ -3,6 +3,7 @@ import warnings
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from dotenv import load_dotenv
+from .logging_config import logger
 
 # Load environment variables from a .env file
 load_dotenv()
@@ -17,7 +18,7 @@ if not URI:
 try:
     # Create a new client and connect to the server
     client = MongoClient(URI, server_api=ServerApi('1'))
-    print("Connected to MongoDB successfully.")
+    logger.info("Connected to MongoDB successfully.")
 except Exception as e:
     print(f"An error occurred while connecting to MongoDB: {e}")
     
