@@ -163,8 +163,6 @@ def ask(query, user_id, chat_history=None, stream=False):
                     "human": query,
                     "system": response,
                     "userid": user_id,
-                    "env" : ENV,
-                    "filenames" : ','.join(filenames),
                     "timestamp" : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 insert_data(DATABASE_NAME, COLLECTION_NAME, data)
