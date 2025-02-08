@@ -1,5 +1,6 @@
 from langchain_pinecone import PineconeVectorStore
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.llms import DeepInfra
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
@@ -15,20 +16,34 @@ load_dotenv()
 #Load api keys
 PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+DEEPINFRA_API_TOKEN = os.getenv("DEEPINFRA_API_TOKEN")
 
 # setup the pinecone environment
 PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
 PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME')
 PINECONE_NAMESPACE = os.getenv('PINECONE_NAMESPACE')
 
-# Set Other Environment Variables
-ENV = os.getenv("ENV")
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small"
+)
+vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
 
-# Setup MongoDB environment
-DATABASE_NAME = os.getenv("DATABASE_NAME")
-COLLECTION_NAME = os.getenv("COLLECTION_NAME")
+# llm = ChatOpenAI(
+#     model="gpt-4o-mini",
+#     temperature=0,
+# )
 
-# Initialize system prompt
+# llm = DeepInfra(model_id="meta-llama/Meta-Llama-3-8B-Instruct")
+llm = DeepInfra(model_id="deepseek-ai/DeepSeek-R1-Distill-Llama-70B")
+
+llm.model_kwargs = {
+    "temperature": 0.3
+    # "repetition_penalty": 1.2,
+    # "max_new_tokens": 250,
+    # "top_p": 0.9,
+}
+
+# Modificato per R1
 system_prompt = """
 Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul paracadutismo con risposte chiare ed esaurienti.
 
@@ -37,20 +52,20 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     -   **Sicurezza**: La sicurezza è sempre la priorità su tutto. Se l'utente chiede di qualcosa che non dovrebbe fare, spiegalo chiaramente.
 
     # Stile e Tono
-    -   **Chiarezza e completezza**: Usa un linguaggio chiaro e fornisci tutti i dettagli di cui disponi.
+    -   **Chiarezza e completezza**: Usa un linguaggio chiaro e fornisci tutti i dettagli rilevanti di cui disponi.
     -   **Tono rassicurante e stimolante**: Motiva e rassicura l'utente bilanciando la sicurezza con l'approccio divertente e positivo allo sport.
 
     # Formato
-    Le risposte devono essere in linguaggio naturale, strutturate in paragrafi chiari e con eventuali elenchi puntati per procedure specifiche.
+    Le risposte devono essere in lingua italiana, strutturate in paragrafi chiari e con elenchi puntati per procedure specifiche.
 
     # Note
+    -  Seleziona sempre le risposte selezionando le informazioni utili dal contesto fornito. 
+    -  Non utilizzare mai le competenze generali del modello o fare inferenze al di fuori del contesto fornito
+    -  Incoraggia sempre a ripassare le procedure di sicurezza
+    -  Invita l'utente a rivolgersi a un istruttore di persona quando necessario
 
-    -   Non utilizzare mai le competenze generali del modello o fare inferenze al di fuori del contesto fornito
-    -   Incoraggia sempre a ripassare le procedure di sicurezza e proponiti per aiutare l'utente a farlo.
-    -   Ricorda di invitare l'utente a rivolgersi sempre a un istruttore di persona quando necessario.
-
-    Utilizza il contesto fornito di seguito per rispondere alla domanda.
-    Se non conosci la risposta, di semplicemente che non la conosci e suggerisci di chiedere a un istruttore 
+    Seleziona le informazioni utili dal contesto fornito di seguito per rispondere alla domanda.
+    Se le informazioni del contesto non sono utili a rispondere, dì semplicemente che non conosci la risposta e suggerisci di riformulare la domanda per chiarirla meglio oppure chiedere a un istruttore 
     Contesto: 
     {context}
 """
