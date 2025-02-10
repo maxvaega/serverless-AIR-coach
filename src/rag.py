@@ -142,8 +142,8 @@ def ask(query, user_id, chat_history=None, stream=False):
                     kind = event["event"]
                     if kind == "on_chain_end":
                         if event["name"] == "retrieve_documents":
-                            filenames = [document.metadata['filename'] for document in event['data']['output']]
-                            #print(f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}")
+                            chunk_ids = [document.id for document in event['data']['output']]
+                            print(chunk_ids)
                     if kind == "on_chat_model_stream":
                         content = serialize_aimessagechunk(event["data"]["chunk"])
                         response_chunks.append(content)
@@ -162,7 +162,8 @@ def ask(query, user_id, chat_history=None, stream=False):
                 data = {
                     "human": query,
                     "system": response,
-                    "userid": user_id,
+                    "userId": user_id,
+                    "chunkId" : ''.join(chunk_ids),
                     "timestamp" : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 insert_data(DATABASE_NAME, COLLECTION_NAME, data)

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from src.logging_config import *
+from src.logging_config import logger
 from src.models import MessageRequest, MessageResponse
 from src.rag import ask
 import uvicorn
@@ -63,7 +63,7 @@ async def query_endpoint(request: MessageRequest):
         logger.info("Processing Request")
 
         response_message = ask(request.message, request.userid, stream=False) #, chat_history=chat_history)
-        logger.info(f"Response: {response_message}")
+        logger.info(f"Response: {response_message.get("answer", "No answer available")}")
 
         # Create the response using the MessageResponse model
         message_response = MessageResponse(
