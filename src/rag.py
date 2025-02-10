@@ -4,8 +4,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
 from langchain_core.messages import AIMessageChunk
+from .logging_config import logger
+import datetime
 import os
-import asyncio
 from dotenv import load_dotenv
 import json
 
@@ -20,18 +21,16 @@ PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
 PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME')
 PINECONE_NAMESPACE = os.getenv('PINECONE_NAMESPACE')
 
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small"
-)
-vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
+# Set Other Environment Variables
+ENV = os.getenv("ENV")
 
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0,
-)
+# Setup MongoDB environment
+DATABASE_NAME = os.getenv("DATABASE_NAME")
+COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
+# Initialize system prompt
 system_prompt = """
-    Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul paracadutismo con risposte chiare ed esaurienti.
+Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul paracadutismo con risposte chiare ed esaurienti.
 
     # Istruzioni Chiave
     -   **Ambito delle risposte**: Rispondi solo a domande relative al paracadutismo. Se la risposta dipende da informazioni personali come il numero di salti o il possesso della licenza, chiedi all'utente di fornire tali dettagli.
@@ -54,11 +53,19 @@ system_prompt = """
     Se non conosci la risposta, di semplicemente che non la conosci e suggerisci di chiedere a un istruttore 
     Contesto: 
     {context}
-    """
+"""
 
-#retrieval_qa_chat_prompt = hub.pull("langchain-ai/retrieval-qa-chat")
-# Combine query and system prompt
 messages = [("system", system_prompt)]
+
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small"
+)
+vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
+
+llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0,
+)
 
 def similar_docs(query, vectorstore, k=5):
     # Perform similarity search
@@ -88,11 +95,28 @@ def serialize_aimessagechunk(chunk):
             f"Object of type {type(chunk).__name__} is not correctly formatted for serialization"
         )
 
-def ask(query, chat_history=None, stream=False):
+def ask(query, user_id, chat_history=None, stream=False):
+    """
+    Processes a user query and returns a response, optionally streaming the response.
 
-    if chat_history != None:
+    This function uses a combination of retrieval and chain mechanisms to process the query
+    and generates a response. If chat history is provided, it extends the messages with the
+    chat history and appends the new query. The function supports both synchronous and
+    asynchronous streaming of responses. In streaming mode, it yields chunks of data and
+    inserts the final response into a MongoDB collection.
+
+    :param query: The user query to process.
+    :param user_id: The ID of the user making the query.
+    :param chat_history: Optional; A list of previous chat messages to include in the context.
+    :param stream: Optional; If True, streams the response asynchronously.
+    :return: The response to the query, either as a single result or a generator for streaming.
+    """
+
+    if chat_history:
         messages.extend(chat_history)
+
     messages.append(("human", query))
+
     retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages(messages)
     combine_docs_chain = create_stuff_documents_chain(
         llm, retrieval_qa_chat_prompt
@@ -100,28 +124,51 @@ def ask(query, chat_history=None, stream=False):
 
     retriever = vectorstore.as_retriever(query=query, k=4)
     chain = create_retrieval_chain(retriever, combine_docs_chain)
+
     # Create a custom prompt template that includes the system prompt
     if not stream:
         return chain.invoke({"input": query})
     else:
+        from .database import insert_data
+        response_chunks = []
+
         # Stream the response
         async def stream_response():
-            async for chunk in chain.astream_events({"input": query}, version="v1"):
+            async for event in chain.astream_events(
+                {"input": query}, version="v2"
+            ):
                 try:
-                    #print(chunk["answer"], end="", flush=True)
-                    chunk_content = serialize_aimessagechunk(chunk["data"]["chunk"])
-                    if len(chunk_content) != 0:
-                        data_dict = {"data": chunk_content}
-                        data_json = json.dumps(data_dict)
-                        yield f"data: {data_json}\n\n"
-                except:
-                    pass
+                    # Catch events
+                    kind = event["event"]
+                    if kind == "on_chain_end":
+                        if event["name"] == "retrieve_documents":
+                            chunk_ids = [document.id for document in event['data']['output']]
+                            print(chunk_ids)
+                    if kind == "on_chat_model_stream":
+                        content = serialize_aimessagechunk(event["data"]["chunk"])
+                        response_chunks.append(content)
+                        if content:
+                            data_dict = {"data": content}
+                            data_json = json.dumps(data_dict)
+                            yield f"data: {data_json}\n\n"
+
+                except Exception as e:
+                    logger.error(f"An error occurred while streaming the events: {e}")
+
+            response = "".join(response_chunks)
+
+            # Insert the data into the MongoDB collection
+            try:
+                data = {
+                    "human": query,
+                    "system": response,
+                    "userId": user_id,
+                    "chunkId" : ''.join(chunk_ids),
+                    "timestamp" : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
+                logger.info(f"Data inserted into the collection: {COLLECTION_NAME}")
+            except Exception as e:
+                logger.error(f"An error occurred while inserting the data into the collection: {e}")
+
         return stream_response()
-
-
-def main():
-    query = input("Enter the query: ").strip("'", )
-    asyncio.run(ask(query, stream=False))
-
-if __name__ == "__main__":
-    main()
