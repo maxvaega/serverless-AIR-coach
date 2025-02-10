@@ -1,24 +1,21 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-import logging
-from pydantic import BaseModel
-from query import ask
-#from database import insert_data, get_data
+from src.logging_config import logger
+from src.models import MessageRequest, MessageResponse
+from src.rag import ask
 import uvicorn
-from typing import Optional
 import os
 
-# Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+# Load environment variables
 
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
-app = FastAPI()
+app = FastAPI(title='aistruttore-api', version='0.1', description='API for AIstruttore chatbot')
 
 # Add CORS middleware
+
 origins = ["http://localhost", "http://localhost:8080", "*"]
 
 app.add_middleware(
@@ -29,20 +26,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Define request model
-class MessageRequest(BaseModel):
-    message: str
-    userid: Optional[str] = None
-    sessionId: Optional[str] = None
-
-
-# Define response model
-class MessageResponse(BaseModel):
-    query: str
-    result: str
-    userid: Optional[str] = None
-    sessionId: Optional[str] = None
-
+#############################################
+# FastAPI Endpoints
+#############################################
 
 @app.get("/")
 def read_root():
@@ -75,34 +61,16 @@ async def query_endpoint(request: MessageRequest):
     logger.info(f"Request: {request}")
     try:
         logger.info("Processing Request")
-        
-        # Check Chat History
-        # chat_history = []
-        # try:
-        #     data = get_data(DATABASE_NAME, COLLECTION_NAME, {"userid": request.userid, "sessionId": request.sessionId})
-        #     for item in data:
-        #         chat_history.append(("human", item["human"]))
-        #         chat_history.append(("system", item["system"]))
-        # except Exception as e:
-        #     logger.error(f"Error getting chat history: {str(e)}")
 
-        response_message = ask(request.message) #, chat_history=chat_history)
-        logger.info(f"Response: {response_message}")
+        response_message = ask(request.message, request.userid, stream=False) #, chat_history=chat_history)
+        logger.info(f"Response: {response_message.get("answer", "No answer available")}")
 
         # Create the response using the MessageResponse model
         message_response = MessageResponse(
             query=request.message,
             result=response_message.get("answer", "No answer available"),
-            userid=request.userid,
-            sessionId=request.sessionId
+            userid=request.userid
         )
-        
-        # insert_data(DATABASE_NAME, COLLECTION_NAME, {
-        #     "human": message_response.query,
-        #     "system": message_response.result,
-        #     "userid": message_response.userid,
-        #     "sessionId": message_response.sessionId
-        # })
         
         return message_response
 
@@ -113,7 +81,7 @@ async def query_endpoint(request: MessageRequest):
 @app.post("/stream_query")
 async def stream_endpoint(request: MessageRequest):
     try:
-        stream_response = ask(request.message, stream=True)
+        stream_response = ask(request.message, request.userid, stream=True)
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Exception occurred: {str(e)}")
@@ -136,8 +104,7 @@ async def test_endpoint(request: MessageRequest):
         message_response = MessageResponse(
             query=request.message,
             result=response_message,
-            userid=request.userid,
-            sessionId=request.sessionId
+            userid=request.userid
         )
 
         # Return response
@@ -149,4 +116,4 @@ async def test_endpoint(request: MessageRequest):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, port=8080)
+    uvicorn.run(app, port=8080, log_level="info")
