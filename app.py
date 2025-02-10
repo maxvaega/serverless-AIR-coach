@@ -12,7 +12,7 @@ import os
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
-app = FastAPI(title='aistruttore-api', version='0.1', description='API for AIstruttore chatbot')
+app = FastAPI(title='aistruttore-api', version='0.1', description='API for AIstruttore chatbot<br />Deepseek version!')
 
 # Add CORS middleware
 
