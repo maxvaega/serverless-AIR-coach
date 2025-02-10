@@ -1,6 +1,6 @@
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.llms import DeepInfra
+from langchain_community.chat_models import ChatDeepInfra
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
@@ -10,6 +10,7 @@ import datetime
 import os
 from dotenv import load_dotenv
 import json
+import asyncio
 
 load_dotenv()
 
@@ -23,6 +24,9 @@ PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
 PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME')
 PINECONE_NAMESPACE = os.getenv('PINECONE_NAMESPACE')
 
+DATABASE_NAME = os.getenv('DATABASE_NAME')
+COLLECTION_NAME = os.getenv('COLLECTION_NAME')
+
 embeddings = OpenAIEmbeddings(
     model="text-embedding-3-small"
 )
@@ -34,13 +38,16 @@ vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embe
 # )
 
 # llm = DeepInfra(model_id="meta-llama/Meta-Llama-3-8B-Instruct")
-llm = DeepInfra(model_id="deepseek-ai/DeepSeek-R1-Distill-Llama-70B")
+llm = ChatDeepInfra(
+    model_name="deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+    streaming=True,
+    verbose=True,
+    temperature=0.4,
+    max_tokens=1500
+    )
 
 llm.model_kwargs = {
-    "temperature": 0.3
-    # "repetition_penalty": 1.2,
-    # "max_new_tokens": 250,
-    # "top_p": 0.9,
+    "ls_max_tokens": 1500
 }
 
 # Modificato per R1
@@ -59,7 +66,7 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     Le risposte devono essere in lingua italiana, strutturate in paragrafi chiari e con elenchi puntati per procedure specifiche.
 
     # Note
-    -  pensa in italiano
+    -  <think>pensa in italiano</think>
     -  Seleziona sempre le risposte selezionando le informazioni utili dal contesto fornito. 
     -  Non utilizzare mai le competenze generali del modello o fare inferenze al di fuori del contesto fornito
     -  Incoraggia sempre a ripassare le procedure di sicurezza
@@ -73,15 +80,6 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
 
 messages = [("system", system_prompt)]
 
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small"
-)
-vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
-
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0,
-)
 
 def similar_docs(query, vectorstore, k=5):
     # Perform similarity search
@@ -132,6 +130,7 @@ def ask(query, user_id, chat_history=None, stream=False):
         messages.extend(chat_history)
 
     messages.append(("human", query))
+    # messages.append(("assistant", "<think>"))
 
     retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages(messages)
     combine_docs_chain = create_stuff_documents_chain(
@@ -150,26 +149,41 @@ def ask(query, user_id, chat_history=None, stream=False):
 
         # Stream the response
         async def stream_response():
-            async for event in chain.astream_events(
-                {"input": query}, version="v2"
-            ):
-                try:
-                    # Catch events
-                    kind = event["event"]
-                    if kind == "on_chain_end":
-                        if event["name"] == "retrieve_documents":
-                            chunk_ids = [document.id for document in event['data']['output']]
-                            print(chunk_ids)
-                    if kind == "on_chat_model_stream":
-                        content = serialize_aimessagechunk(event["data"]["chunk"])
-                        response_chunks.append(content)
-                        if content:
-                            data_dict = {"data": content}
-                            data_json = json.dumps(data_dict)
-                            yield f"data: {data_json}\n\n"
+            try:
+                async with asyncio.timeout(60):  
+                    async for event in chain.astream_events(
+                        {"input": query}, version="v2"
+                    ):
+                        try:
+                            kind = event["event"]
+                            if kind == "on_chain_end":
+                                if event["name"] == "retrieve_documents":
+                                    chunk_ids = [document.id for document in event['data']['output']]
+                                    logger.info(f"Retrieved document IDs: {chunk_ids}")
+                            elif kind == "on_chat_model_stream":
+                                content = serialize_aimessagechunk(event["data"]["chunk"])
+                                if content:
+                                    response_chunks.append(content)
+                                    data_dict = {"data": content}
+                                    data_json = json.dumps(data_dict)
+                                    yield "data: " + data_json + "\n\n"
+                                else:
+                                    logger.warning("Received empty content from model")
 
-                except Exception as e:
-                    logger.error(f"An error occurred while streaming the events: {e}")
+                        except Exception as e:
+                            logger.error(f"Error processing stream event: {str(e)}")
+                            error_json = json.dumps({"error": "Errore durante elaborazione della risposta"})
+                            yield "data: " + error_json + "\n\n"
+                            continue
+
+            except asyncio.TimeoutError:
+                logger.error("Request timed out")
+                error_json = json.dumps({"error": "Timeout della richiesta"})
+                yield "data: " + error_json + "\n\n"
+            except Exception as e:
+                logger.error(f"Stream error: {str(e)}")
+                error_json = json.dumps({"error": str(e)})
+                yield "data: " + error_json + "\n\n"
 
             response = "".join(response_chunks)
 

@@ -12,3 +12,4 @@ pymongo[srv]==3.12.0
 # pymongo==3.12.0
 langchain_community==0.3.17
 >>>>>>> 41a569a (Implementazione Deepseek 70B)
+asyncio==3.4.3
