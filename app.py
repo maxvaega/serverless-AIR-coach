@@ -57,7 +57,7 @@ async def query_endpoint(request: MessageRequest):
         Logs the start of the request, the request details, the processing status, the response, 
         and any exceptions that occur.
     """
-    logger.info("Start Request")
+
     logger.info(f"Request: {request}")
     try:
         logger.info("Processing Request")
@@ -80,6 +80,7 @@ async def query_endpoint(request: MessageRequest):
     
 @app.post("/stream_query")
 async def stream_endpoint(request: MessageRequest):
+    logger.info(f"Request: {request}")
     try:
         stream_response = ask(request.message, request.userid, stream=True)
         return StreamingResponse(stream_response, media_type="text/event-stream")
