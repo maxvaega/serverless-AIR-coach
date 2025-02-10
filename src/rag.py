@@ -122,10 +122,11 @@ def ask(query, user_id, chat_history=None, stream=False):
     :return: The response to the query, either as a single result or a generator for streaming.
     """
 
-    messages = [("system", system_prompt)]
-
+    messages = []
     if chat_history:
         messages.extend(chat_history)
+    else:
+        messages.append(("system", system_prompt))
 
     messages.append(("human", query))
     # messages.append(("assistant", "<think>"))
