@@ -77,9 +77,6 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     {context}
 """
 
-messages = [("system", system_prompt)]
-
-
 def similar_docs(query, vectorstore, k=5):
     # Perform similarity search
     similar_docs = vectorstore.similarity_search(query, k=k)
@@ -125,8 +122,10 @@ def ask(query, user_id, chat_history=None, stream=False):
     :return: The response to the query, either as a single result or a generator for streaming.
     """
 
-    # if chat_history:
-    #     messages.extend(chat_history)
+    messages = [("system", system_prompt)]
+
+    if chat_history:
+        messages.extend(chat_history)
 
     messages.append(("human", query))
     # messages.append(("assistant", "<think>"))
