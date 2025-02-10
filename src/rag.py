@@ -10,7 +10,6 @@ import datetime
 import os
 from dotenv import load_dotenv
 import json
-import asyncio
 
 load_dotenv()
 
@@ -140,7 +139,6 @@ def ask(query, user_id, chat_history=None, stream=False):
     retriever = vectorstore.as_retriever(query=query, k=4)
     chain = create_retrieval_chain(retriever, combine_docs_chain)
 
-    # Create a custom prompt template that includes the system prompt
     if not stream:
         return chain.invoke({"input": query})
     else:
@@ -149,41 +147,26 @@ def ask(query, user_id, chat_history=None, stream=False):
 
         # Stream the response
         async def stream_response():
-            try:
-                async with asyncio.timeout(60):  
-                    async for event in chain.astream_events(
-                        {"input": query}, version="v2"
-                    ):
-                        try:
-                            kind = event["event"]
-                            if kind == "on_chain_end":
-                                if event["name"] == "retrieve_documents":
-                                    chunk_ids = [document.id for document in event['data']['output']]
-                                    logger.info(f"Retrieved document IDs: {chunk_ids}")
-                            elif kind == "on_chat_model_stream":
-                                content = serialize_aimessagechunk(event["data"]["chunk"])
-                                if content:
-                                    response_chunks.append(content)
-                                    data_dict = {"data": content}
-                                    data_json = json.dumps(data_dict)
-                                    yield "data: " + data_json + "\n\n"
-                                else:
-                                    logger.warning("Received empty content from model")
+            async for event in chain.astream_events(
+                {"input": query}, version="v2"
+            ):
+                try:
+                    # Catch events
+                    kind = event["event"]
+                    if kind == "on_chain_end":
+                        if event["name"] == "retrieve_documents":
+                            chunk_ids = [document.id for document in event['data']['output']]
+                            print(chunk_ids)
+                    if kind == "on_chat_model_stream":
+                        content = serialize_aimessagechunk(event["data"]["chunk"])
+                        response_chunks.append(content)
+                        if content:
+                            data_dict = {"data": content}
+                            data_json = json.dumps(data_dict)
+                            yield f"data: {data_json}\n\n"
 
-                        except Exception as e:
-                            logger.error(f"Error processing stream event: {str(e)}")
-                            error_json = json.dumps({"error": "Errore durante elaborazione della risposta"})
-                            yield "data: " + error_json + "\n\n"
-                            continue
-
-            except asyncio.TimeoutError:
-                logger.error("Request timed out")
-                error_json = json.dumps({"error": "Timeout della richiesta"})
-                yield "data: " + error_json + "\n\n"
-            except Exception as e:
-                logger.error(f"Stream error: {str(e)}")
-                error_json = json.dumps({"error": str(e)})
-                yield "data: " + error_json + "\n\n"
+                except Exception as e:
+                    logger.error(f"An error occurred while streaming the events: {e}")
 
             response = "".join(response_chunks)
 
