@@ -6,10 +6,6 @@ langchain_pinecone==0.2.0
 pydantic==2.10.4
 python-dotenv==1.0.1
 uvicorn==0.34.0
-<<<<<<< HEAD
 pymongo[srv]==3.12.0
-=======
-# pymongo==3.12.0
 langchain_community==0.3.17
->>>>>>> 41a569a (Implementazione Deepseek 70B)
 asyncio==3.4.3
