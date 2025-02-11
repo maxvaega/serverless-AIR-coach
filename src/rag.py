@@ -36,9 +36,9 @@ vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embe
 #     temperature=0,
 # )
 
-# llm = DeepInfra(model_id="meta-llama/Meta-Llama-3-8B-Instruct")
 llm = ChatDeepInfra(
-    model_name="deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+    #model_name="deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+    model_name="deepseek-ai/DeepSeek-V3",
     streaming=True,
     verbose=True,
     temperature=0.4,
@@ -65,14 +65,14 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     Le risposte devono essere in lingua italiana, strutturate in paragrafi chiari e con elenchi puntati per procedure specifiche.
 
     # Note
-    -  <think>pensa in italiano</think>
-    -  Seleziona sempre le risposte selezionando le informazioni utili dal contesto fornito. 
+    -  rispondi in italiano
+    -  Seleziona le informazioni utili dal contesto fornito per rispondere alla domanda
     -  Non utilizzare mai le competenze generali del modello o fare inferenze al di fuori del contesto fornito
+    -  Se le informazioni del contesto non sono utili per rispondere alla domanda dell'utente, chiedi all'utente di riformulare la domanda per chiarirla meglio oppure chiedere a un istruttore 
     -  Incoraggia sempre a ripassare le procedure di sicurezza
     -  Invita l'utente a rivolgersi a un istruttore di persona quando necessario
 
     Seleziona le informazioni utili dal contesto fornito di seguito per rispondere alla domanda.
-    Se le informazioni del contesto non sono utili a rispondere, dì semplicemente che non conosci la risposta e suggerisci di riformulare la domanda per chiarirla meglio oppure chiedere a un istruttore 
     Contesto: 
     {context}
 """
