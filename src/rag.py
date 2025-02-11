@@ -38,7 +38,7 @@ vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embe
 
 llm = ChatDeepInfra(
     #model_name="deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
-    model_name="deepseek-ai/DeepSeek-V3",
+    model_name="meta-llama/Llama-3.3-70B-Instruct-Turbo",
     streaming=True,
     verbose=True,
     temperature=0.4,
