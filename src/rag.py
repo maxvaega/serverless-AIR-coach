@@ -55,6 +55,7 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     {context}
 """
 
+
 embeddings = OpenAIEmbeddings(
     model="text-embedding-3-small"
 )
@@ -115,6 +116,7 @@ def ask(query, user_id, chat_history=None, stream=False):
         messages.extend(chat_history)
     else:
         messages.append(("system", system_prompt))
+
 
     messages.append(("human", query))
 
