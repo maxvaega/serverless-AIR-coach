@@ -55,7 +55,6 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     {context}
 """
 
-messages = [("system", system_prompt)]
 
 embeddings = OpenAIEmbeddings(
     model="text-embedding-3-small"
@@ -112,8 +111,12 @@ def ask(query, user_id, chat_history=None, stream=False):
     :return: The response to the query, either as a single result or a generator for streaming.
     """
 
+    messages = []
     if chat_history:
         messages.extend(chat_history)
+    else:
+        messages.append(("system", system_prompt))
+
 
     messages.append(("human", query))
 
