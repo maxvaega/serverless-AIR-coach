@@ -112,12 +112,10 @@ def ask(query, user_id, chat_history=None, stream=False):
     """
 
     messages = []
-    if chat_history:
-        messages.extend(chat_history)
-    else:
-        messages.append(("system", system_prompt))
-
-
+    # if chat_history:
+    #     messages.extend(chat_history)
+    # else:
+    messages.append(("system", system_prompt))
     messages.append(("human", query))
 
     retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages(messages)
