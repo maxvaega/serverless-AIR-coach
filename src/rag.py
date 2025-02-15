@@ -88,8 +88,9 @@ embeddings = OpenAIEmbeddings(
 )
 vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
 
+model="gemini-2.0-flash"
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
+    model=model,
     temperature=0,
 )
 
@@ -165,6 +166,7 @@ def ask(query, user_id, chat_history=None, stream=False):
                 try:
                     # Catch events
                     content = event.content
+                    response_chunks.append(content)
                     data_dict = {"data": content}
                     data_json = json.dumps(data_dict)
                     yield f"data: {data_json}\n\n"
@@ -173,6 +175,22 @@ def ask(query, user_id, chat_history=None, stream=False):
                     logger.error(f"An error occurred while streaming the events: {e}")
 
             # Insert the data into the MongoDB collection
+            response = "".join(response_chunks)
+
+            # Insert the data into the MongoDB collection
+            try:
+                data = {
+                    "human": query,
+                    "system": response,
+                    "userId": user_id,
+                    # "chunkId" : ''.join(chunk_ids),
+                    "llm": model,
+                    "timestamp" : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
+                logger.info(f"Data inserted into the collection: {COLLECTION_NAME}")
+            except Exception as e:
+                logger.error(f"An error occurred while inserting the data into the collection: {e}")
 
         return stream_response()
 
