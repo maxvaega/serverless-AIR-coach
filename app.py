@@ -12,7 +12,7 @@ import os
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
-app = FastAPI(title='aistruttore-api', version='0.1', description='API for AIstruttore chatbot')
+app = FastAPI(title='aistruttore-api-gemini', version='0.1', description='API for AIstruttore chatbot<br />Gemini edition')
 
 # Add CORS middleware
 
@@ -63,12 +63,12 @@ async def query_endpoint(request: MessageRequest):
         logger.info("Processing Request")
 
         response_message = ask(request.message, request.userid, stream=False) #, chat_history=chat_history)
-        logger.info(f"Response: {response_message.get('answer', 'No answer available')}")
+        logger.info(f"Response: {response_message.content}")
 
         # Create the response using the MessageResponse model
         message_response = MessageResponse(
             query=request.message,
-            result=response_message.get("answer", "No answer available"),
+            result=response_message.content,
             userid=request.userid
         )
         

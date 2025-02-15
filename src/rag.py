@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
-from langchain_core.messages import AIMessageChunk
+from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from .logging_config import logger
 import datetime
 import os
@@ -30,8 +30,33 @@ ENV = os.getenv("ENV")
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
+# Read all documents from docs directory
+docs_content = []
+docs_path = os.path.join(os.path.dirname(__file__), 'docs')
+
+try:
+    if not os.path.exists(docs_path):
+        raise FileNotFoundError(f"Directory not found: {docs_path}")
+        
+    for doc_file in os.listdir(docs_path):
+        if doc_file.endswith('.md'):  # Only process markdown files
+            file_path = os.path.join(docs_path, doc_file)
+            try:
+                with open(file_path, "r", encoding='utf-8') as file:
+                    docs_content.append(file.read())
+            except Exception as e:
+                logger.error(f"Error reading file {doc_file}: {str(e)}")
+                
+    # Combine all documents
+    combined_docs = "\n\n".join(docs_content)
+    print(f"Successfully loaded {len(docs_content)} documents")
+    
+except Exception as e:
+    logger.error(f"Error processing documents: {str(e)}")
+    combined_docs = ""
+
 # Initialize system prompt
-system_prompt = """
+system_prompt = f"""
 Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul paracadutismo con risposte chiare ed esaurienti.
 
     # Istruzioni Chiave
@@ -54,7 +79,7 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     Utilizza il contesto fornito di seguito per rispondere alla domanda.
     Se non conosci la risposta, di semplicemente che non la conosci e suggerisci di chiedere a un istruttore 
     Contesto: 
-    {context}
+    {combined_docs}
 """
 
 
@@ -113,65 +138,41 @@ def ask(query, user_id, chat_history=None, stream=False):
     :return: The response to the query, either as a single result or a generator for streaming.
     """
 
-    messages = []
-    # if chat_history:
-    #     messages.extend(chat_history)
-    # else:
-    messages.append(("system", system_prompt))
-    messages.append(("human", query))
+    messages = [
+        SystemMessage(system_prompt),
+        HumanMessage(query)
+    ]
 
-    retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages(messages)
-    combine_docs_chain = create_stuff_documents_chain(
-        llm, retrieval_qa_chat_prompt
-    )
+    #retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages(messages)
 
-    retriever = vectorstore.as_retriever(query=query, k=4)
-    chain = create_retrieval_chain(retriever, combine_docs_chain)
+    #combine_docs_chain = create_stuff_documents_chain(
+    #    llm, retrieval_qa_chat_prompt
+    #)
+
+    # retriever = vectorstore.as_retriever(query=query, k=4)
+    # chain = create_retrieval_chain(retriever, combine_docs_chain)
 
     # Create a custom prompt template that includes the system prompt
     if not stream:
-        return chain.invoke({"input": query})
+        return llm.invoke(messages)
     else:
         from .database import insert_data
         response_chunks = []
 
         # Stream the response
         async def stream_response():
-            async for event in chain.astream_events(
-                {"input": query}, version="v2"
-            ):
+            for event in llm.stream(input=messages):
                 try:
                     # Catch events
-                    kind = event["event"]
-                    if kind == "on_chain_end":
-                        if event["name"] == "retrieve_documents":
-                            chunk_ids = [document.id for document in event['data']['output']]
-                            print(chunk_ids)
-                    if kind == "on_chat_model_stream":
-                        content = serialize_aimessagechunk(event["data"]["chunk"])
-                        response_chunks.append(content)
-                        if content:
-                            data_dict = {"data": content}
-                            data_json = json.dumps(data_dict)
-                            yield f"data: {data_json}\n\n"
+                    content = event.content
+                    data_dict = {"data": content}
+                    data_json = json.dumps(data_dict)
+                    yield f"data: {data_json}\n\n"
 
                 except Exception as e:
                     logger.error(f"An error occurred while streaming the events: {e}")
 
-            response = "".join(response_chunks)
-
             # Insert the data into the MongoDB collection
-            try:
-                data = {
-                    "human": query,
-                    "system": response,
-                    "userId": user_id,
-                    "chunkId" : ''.join(chunk_ids),
-                    "timestamp" : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                logger.info(f"Data inserted into the collection: {COLLECTION_NAME}")
-            except Exception as e:
-                logger.error(f"An error occurred while inserting the data into the collection: {e}")
 
         return stream_response()
+

@@ -1,4 +1,4 @@
-# AIstruttore API
+# AIstruttore API - Gemini version
 
 AIstruttore API is a FastAPI-based application designed for handling chatbot interactions.
 
