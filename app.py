@@ -63,7 +63,7 @@ async def query_endpoint(request: MessageRequest):
         logger.info("Processing Request")
 
         response_message = ask(request.message, request.userid, stream=False) #, chat_history=chat_history)
-        logger.info(f"Response: {response_message.get("answer", "No answer available")}")
+        logger.info(f"Response: {response_message.get('answer', 'No answer available')}")
 
         # Create the response using the MessageResponse model
         message_response = MessageResponse(

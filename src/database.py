@@ -18,7 +18,7 @@ if not URI:
 try:
     # Create a new client and connect to the server
     client = MongoClient(URI, server_api=ServerApi('1'))
-    logger.info("Connected to MongoDB successfully.")
+    # logger.info("Connected to MongoDB successfully.") # Antonio sistemalo
 except Exception as e:
     print(f"An error occurred while connecting to MongoDB: {e}")
     
