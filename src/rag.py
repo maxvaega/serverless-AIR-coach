@@ -1,9 +1,6 @@
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings #, ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from .logging_config import logger
 import datetime
@@ -138,11 +135,12 @@ def ask(query, user_id, chat_history=None, stream=False):
     :param stream: Optional; If True, streams the response asynchronously.
     :return: The response to the query, either as a single result or a generator for streaming.
     """
+    messages = [SystemMessage(system_prompt)]
 
-    messages = [
-        SystemMessage(system_prompt),
-        HumanMessage(query)
-    ]
+    if chat_history:
+        messages = messages.append(chat_history)
+
+    messages.append(HumanMessage(query))
 
     #retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages(messages)
 
