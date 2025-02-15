@@ -1,5 +1,6 @@
 from langchain_pinecone import PineconeVectorStore
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_openai import OpenAIEmbeddings #, ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
@@ -14,7 +15,8 @@ load_dotenv()
 
 #Load api keys
 PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+# OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # setup the pinecone environment
 PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
@@ -61,8 +63,8 @@ embeddings = OpenAIEmbeddings(
 )
 vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
 
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash",
     temperature=0,
 )
 
