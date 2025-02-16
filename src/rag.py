@@ -1,5 +1,5 @@
-from langchain_pinecone import PineconeVectorStore
-from langchain_openai import OpenAIEmbeddings #, ChatOpenAI
+# from langchain_pinecone import PineconeVectorStore
+# from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from .logging_config import logger
@@ -80,10 +80,10 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
 """
 
 
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small"
-)
-vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
+# embeddings = OpenAIEmbeddings(
+#     model="text-embedding-3-small"
+# )
+# vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
 
 model="gemini-2.0-flash"
 llm = ChatGoogleGenerativeAI(
@@ -91,21 +91,21 @@ llm = ChatGoogleGenerativeAI(
     temperature=0,
 )
 
-def similar_docs(query, vectorstore, k=5):
-    # Perform similarity search
-    similar_docs = vectorstore.similarity_search(query, k=k)
+# def similar_docs(query, vectorstore, k=5):
+#     # Perform similarity search
+#     similar_docs = vectorstore.similarity_search(query, k=k)
 
-    # Extract document details into a JSON-compatible structure
-    docs_json = []
-    for doc in similar_docs:
-        docs_json.append({
-            "id": doc.id, 
-            "content": doc.page_content,         
-            "metadata": doc.metadata             
-        })
+#     # Extract document details into a JSON-compatible structure
+#     docs_json = []
+#     for doc in similar_docs:
+#         docs_json.append({
+#             "id": doc.id, 
+#             "content": doc.page_content,         
+#             "metadata": doc.metadata             
+#         })
 
-    # Return the JSON structure
-    return json.dumps(docs_json, ensure_ascii=False, indent=2)
+#     # Return the JSON structure
+#     return json.dumps(docs_json, ensure_ascii=False, indent=2)
 
 def serialize_aimessagechunk(chunk):
     """
