@@ -1,5 +1,3 @@
-# from langchain_pinecone import PineconeVectorStore
-# from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from .logging_config import logger
@@ -11,14 +9,7 @@ import json
 load_dotenv()
 
 #Load api keys
-PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-# OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
-# setup the pinecone environment
-PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
-PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME')
-PINECONE_NAMESPACE = os.getenv('PINECONE_NAMESPACE')
 
 # Set Other Environment Variables
 ENV = os.getenv("ENV")
@@ -79,33 +70,11 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     {combined_docs}
 """
 
-
-# embeddings = OpenAIEmbeddings(
-#     model="text-embedding-3-small"
-# )
-# vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings, namespace=PINECONE_NAMESPACE, pinecone_api_key=PINECONE_API_KEY) #, distance_strategy="DistanceStrategy.COSINE")
-
 model="gemini-2.0-flash"
 llm = ChatGoogleGenerativeAI(
     model=model,
     temperature=0,
 )
-
-# def similar_docs(query, vectorstore, k=5):
-#     # Perform similarity search
-#     similar_docs = vectorstore.similarity_search(query, k=k)
-
-#     # Extract document details into a JSON-compatible structure
-#     docs_json = []
-#     for doc in similar_docs:
-#         docs_json.append({
-#             "id": doc.id, 
-#             "content": doc.page_content,         
-#             "metadata": doc.metadata             
-#         })
-
-#     # Return the JSON structure
-#     return json.dumps(docs_json, ensure_ascii=False, indent=2)
 
 def serialize_aimessagechunk(chunk):
     """
@@ -142,16 +111,6 @@ def ask(query, user_id, chat_history=None, stream=False):
 
     messages.append(HumanMessage(query))
 
-    #retrieval_qa_chat_prompt = ChatPromptTemplate.from_messages(messages)
-
-    #combine_docs_chain = create_stuff_documents_chain(
-    #    llm, retrieval_qa_chat_prompt
-    #)
-
-    # retriever = vectorstore.as_retriever(query=query, k=4)
-    # chain = create_retrieval_chain(retriever, combine_docs_chain)
-
-    # Create a custom prompt template that includes the system prompt
     if not stream:
         return llm.invoke(messages)
     else:
@@ -181,7 +140,6 @@ def ask(query, user_id, chat_history=None, stream=False):
                     "human": query,
                     "system": response,
                     "userId": user_id,
-                    # "chunkId" : ''.join(chunk_ids),
                     "llm": model,
                     "timestamp" : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
