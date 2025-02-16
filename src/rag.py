@@ -1,5 +1,5 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from .logging_config import logger
 import datetime
 from .env import *
@@ -96,7 +96,7 @@ llm = ChatGoogleGenerativeAI(
     temperature=0,
 )
 
-def ask(query, user_id, chat_history=None, stream=False):
+def ask(query, user_id, chat_history=False, stream=False):
     """
     Processes a user query and returns a response, optionally streaming the response.
 
@@ -115,7 +115,11 @@ def ask(query, user_id, chat_history=None, stream=False):
     messages = [SystemMessage(system_prompt)]
 
     if chat_history:
-        messages = messages.append(chat_history)
+        from .database import get_data
+        history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id})
+        for msg in history:
+            messages.append(HumanMessage(msg["human"]))
+            messages.append(AIMessage(msg["system"]))
 
     messages.append(HumanMessage(query))
 
@@ -156,6 +160,5 @@ def ask(query, user_id, chat_history=None, stream=False):
                 logger.info(f"Data inserted into the collection: {COLLECTION_NAME}")
             except Exception as e:
                 logger.error(f"An error occurred while inserting the data into the collection: {e}")
-
         return stream_response()
 

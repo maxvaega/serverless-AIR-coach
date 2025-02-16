@@ -75,7 +75,7 @@ async def query_endpoint(request: MessageRequest):
 @app.post("/stream_query")
 async def stream_endpoint(request: MessageRequest):
     try:
-        stream_response = ask(request.message, request.userid, stream=True)
+        stream_response = ask(request.message, request.userid, chat_history=True, stream=True)
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Exception occurred: {str(e)}")
