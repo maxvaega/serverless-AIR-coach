@@ -8,7 +8,7 @@
   "routes": [
     {
       "src": "/api/(.*)", 
-      "dest": "/$1"  
+      "dest": "/app.py"  
     }
   ],
   "env": {
