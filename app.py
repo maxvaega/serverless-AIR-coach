@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
@@ -13,7 +13,7 @@ DATABASE_NAME = os.getenv("DATABASE_NAME")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
 app = FastAPI(title='Air-coach-api', version='0.2', description='API for Air Coach: <br /><i>Always In Reach</i>')
-
+api_router = APIRouter(prefix="/api")
 # Add CORS middleware
 
 origins = ["http://localhost", "http://localhost:8080", "*"]
