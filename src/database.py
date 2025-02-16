@@ -1,16 +1,7 @@
-import os
-import warnings
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from dotenv import load_dotenv
+from .env import URI
 from .logging_config import logger
-
-# Load environment variables from a .env file
-load_dotenv()
-
-# Get the MongoDB URI from environment variables
-URI = os.getenv("MONGODB_URI")
-DATABASE_NAME = os.getenv("DATABASE_NAME")
 
 if not URI:
     raise ValueError("No MongoDB URI found. Please set the MONGODB_URI environment variable.")
