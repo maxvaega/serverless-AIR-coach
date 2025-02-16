@@ -5,12 +5,6 @@ from src.logging_config import logger
 from src.models import MessageRequest, MessageResponse
 from src.rag import ask
 import uvicorn
-import os
-
-# Load environment variables
-
-DATABASE_NAME = os.getenv("DATABASE_NAME")
-COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
 app = FastAPI(title='aistruttore-api-gemini', version='0.1', description='API for AIstruttore chatbot<br />Gemini edition')
 

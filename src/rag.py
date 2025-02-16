@@ -2,46 +2,65 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from .logging_config import logger
 import datetime
-import os
-from dotenv import load_dotenv
+from .env import *
 import json
+import boto3
 
-load_dotenv()
+s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+_docs_cache = {
+    "content": None,
+    "timestamp": None 
+}
 
-#Load api keys
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+def fetch_docs_from_s3():
+    """
+    Downloads Markdown files from the S3 bucket and combines them into a single string.
+    """
+    try:
+        logger.info("Fetching Bucket S3...")
+        objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix='docs/')
+        docs_content = []
 
-# Set Other Environment Variables
-ENV = os.getenv("ENV")
+        # Itera sugli oggetti nel bucket
+        for obj in objects.get('Contents', []):
+            if obj['Key'].endswith('.md'):  # Filtra solo i file Markdown
+                response = s3_client.get_object(Bucket=BUCKET_NAME, Key=obj['Key'])
+                file_content = response['Body'].read().decode('utf-8')
+                docs_content.append(file_content)
 
-# Setup MongoDB environment
-DATABASE_NAME = os.getenv("DATABASE_NAME")
-COLLECTION_NAME = os.getenv("COLLECTION_NAME")
+        # Combina tutti i file in un'unica stringa
+        combined_docs = "\n\n".join(docs_content)
+        logger.info(f"Found {len(docs_content)} file Markdown from S3.")
+        return combined_docs
 
-# Read all documents from docs directory
-docs_content = []
-docs_path = os.path.join(os.path.dirname(__file__), 'docs')
+    except Exception as e:
+        logger.error(f"Error while downloading files from S3: {e}")
+        return ""
 
-try:
-    if not os.path.exists(docs_path):
-        raise FileNotFoundError(f"Directory not found: {docs_path}")
-        
-    for doc_file in os.listdir(docs_path):
-        if doc_file.endswith('.md'):  # Only process markdown files
-            file_path = os.path.join(docs_path, doc_file)
-            try:
-                with open(file_path, "r", encoding='utf-8') as file:
-                    docs_content.append(file.read())
-            except Exception as e:
-                logger.error(f"Error reading file {doc_file}: {str(e)}")
-                
-    # Combine all documents
-    combined_docs = "\n\n".join(docs_content)
-    print(f"Successfully loaded {len(docs_content)} documents")
-    
-except Exception as e:
-    logger.error(f"Error processing documents: {str(e)}")
-    combined_docs = ""
+def get_combined_docs():
+    """
+    Returns the combined content of the Markdown files, using the cache if valid.
+    If the cache is expired, reloads the data from S3.
+    """
+    global _docs_cache
+    now = datetime.datetime.utcnow()
+
+    # Controlla se la cache è valida
+    if _docs_cache["content"] is None or _docs_cache["timestamp"] is None:
+        logger.info("Cache non presente, caricamento iniziale...")
+    elif (now - _docs_cache["timestamp"]) > datetime.timedelta(seconds=CACHE_TTL):
+        logger.info("Cache scaduta, ricaricamento dei dati da S3...")
+    else:
+        logger.info("Cache valida, restituzione dei dati dalla cache.")
+        return _docs_cache["content"]
+
+    # Ricarica i dati da S3 e aggiorna la cache
+    _docs_cache["content"] = fetch_docs_from_s3()
+    _docs_cache["timestamp"] = now
+    return _docs_cache["content"]
+
+# Load Documents from S3
+combined_docs = get_combined_docs()
 
 # Initialize system prompt
 system_prompt = f"""
@@ -70,23 +89,12 @@ Sei AIstruttore, un esperto di paracadutismo Italiano. Rispondi a domande sul pa
     {combined_docs}
 """
 
-model="gemini-2.0-flash"
+# Define LLM Model
+model = "gemini-2.0-flash"
 llm = ChatGoogleGenerativeAI(
     model=model,
     temperature=0,
 )
-
-def serialize_aimessagechunk(chunk):
-    """
-    Custom serializer for AIMessageChunk objects.
-    Convert the AIMessageChunk object to a serializable format.
-    """
-    if isinstance(chunk, AIMessageChunk):
-        return chunk.content
-    else:
-        raise TypeError(
-            f"Object of type {type(chunk).__name__} is not correctly formatted for serialization"
-        )
 
 def ask(query, user_id, chat_history=None, stream=False):
     """
@@ -111,6 +119,7 @@ def ask(query, user_id, chat_history=None, stream=False):
 
     messages.append(HumanMessage(query))
 
+    # Create a custom prompt template that includes the system prompt
     if not stream:
         return llm.invoke(messages)
     else:
