@@ -12,7 +12,7 @@ import os
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
-app = FastAPI(title='aistruttore-api', version='0.1', description='API for AIstruttore chatbot')
+app = FastAPI(title='Air-coach-api', version='0.2', description='API for Air Coach: <br /><i>Always In Reach</i>')
 
 # Add CORS middleware
 
@@ -32,7 +32,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the AIstruttore API"}
+    return {"message": "Welcome to the Air Coach API"}
 
 
 @app.post("/query")

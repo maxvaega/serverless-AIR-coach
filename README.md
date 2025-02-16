@@ -1,10 +1,10 @@
-# AIstruttore API
+# Air Coach API
 
-AIstruttore API is a FastAPI-based application designed for handling chatbot interactions.
+Air Coach API is a FastAPI-based application designed for handling chatbot interactions.
 
 ## Features
 
-- **Query Endpoint**: Handle query requests and return responses.
+- **Query Endpoint**: Handle query requests and return responses. <www.air-coach.com/api>
 - **Streaming Query Endpoint**: Stream responses for long-running queries.
 - **Test Endpoint**: Test the API with a simple request-response mechanism.
 - **CORS Middleware**: Allow cross-origin requests.
@@ -24,6 +24,7 @@ The following environment variables are required to configure the application:
 
 ```
 # Pinecone Configuration
+PINECONE_API_KEY=<PINECONE_API_KEY>
 PINECONE_ENVIRONMENT=<PINECONE_ENVIRONMENT>
 PINECONE_INDEX_NAME=<PINECONE_INDEX_NAME>
 PINECONE_NAMESPACE=<PINECONE_NAMESPACE>
@@ -41,9 +42,6 @@ LANGCHAIN_PROJECT=<LANGCHAIN_PROJECT>
 MONGODB_URI=<MONGODB_URI>
 DATABASE_NAME=<DATABASE_NAME>
 COLLECTION_NAME=<COLLECTION_NAME>
-
-# Environment
-ENV=<ENV>
 ```
 
 # Local Test
