@@ -1,9 +1,8 @@
 {
-    "redirects": [
+    "rewrites": [
         {
-          "source": "/",
-          "destination": "/api",
-          "permanent": true
+          "source": "/api/:path*",
+          "destination": "/:path*"
         }
       ],
     "builds": [
