@@ -1,17 +1,17 @@
 {
-    "builds": [
-      {
-        "src": "app.py",
-        "use": "@vercel/python"
-      }
-    ],
-    "routes": [
-      {
-        "src": "/api/(.*)", 
-        "dest": "/app.py/$1"
-      }
-    ],
-    "env": {
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)", 
+      "dest": "/app.py/$1"  
+    }
+  ],
+  "env": {
     "PYTHONPATH": "src/"
-}
   }
+}
