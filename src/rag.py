@@ -5,6 +5,7 @@ import datetime
 from .env import *
 import json
 import boto3
+from .database import get_data, ensure_indexes
 
 s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 _docs_cache = {
@@ -96,6 +97,8 @@ llm = ChatGoogleGenerativeAI(
     temperature=0,
 )
 
+ensure_indexes(DATABASE_NAME, COLLECTION_NAME)
+
 def ask(query, user_id, chat_history=False, stream=False):
     """
     Processes a user query and returns a response, optionally streaming the response.
@@ -114,9 +117,9 @@ def ask(query, user_id, chat_history=False, stream=False):
     """
     messages = [SystemMessage(system_prompt)]
 
+    history_limit=10
     if chat_history:
-        from .database import get_data
-        history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id})
+        history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
         for msg in history:
             messages.append(HumanMessage(msg["human"]))
             messages.append(AIMessage(msg["system"]))
