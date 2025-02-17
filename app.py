@@ -6,7 +6,7 @@ from src.models import MessageRequest, MessageResponse
 from src.rag import ask
 import uvicorn
 
-app = FastAPI(title='aistruttore-api-gemini', version='0.1', description='API for AIstruttore chatbot<br />Gemini edition')
+app = FastAPI(title='Air-coach api', version='0.2', description='API for AIR Coach application<br />now with Gemini 2.0')
 
 # Add CORS middleware
 
@@ -26,7 +26,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the AIstruttore API"}
+    return {"message": "Welcome to the AIR Coach API"}
 
 
 @app.post("/query")
