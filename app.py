@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest, MessageResponse
-from src.rag import ask
+from src.rag import ask, update_docs   # Importa update_docs da rag.py
 import uvicorn
 
 app = FastAPI(title='Air-coach api', version='0.2', description='API for AIR Coach application<br />now with Gemini 2.0')
@@ -75,13 +75,32 @@ async def query_endpoint(request: MessageRequest):
 @app.post("/stream_query")
 async def stream_endpoint(request: MessageRequest):
     try:
-        stream_response = ask(request.message, request.userid, stream=True)
+        stream_response = ask(request.message, request.userid, chat_history=True, stream=True)
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Exception occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+@app.post("/update_docs")
+async def update_docs_endpoint():
+    """
+    Endpoint that triggers a manual refresh of the document cache and rebuilds the system prompt.
+    Returns information about the updated documents including:
+    - A success message
+    - The total number of documents
+    - Details for each document (title and last modified date)
+    """
+    try:
+        update_result = update_docs()
+        return {
+            "message": update_result["message"],
+            "docs_count": update_result["docs_count"],
+            "docs_details": update_result["docs_details"]
+        }
+    except Exception as e:
+        logger.error(f"Exception occurred while updating docs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/test/", response_model=MessageResponse)
 async def test_endpoint(request: MessageRequest):
     try:
