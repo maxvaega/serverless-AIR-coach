@@ -3,16 +3,10 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest, MessageResponse
-from src.rag import ask
+from src.rag import ask, update_docs   # Importa update_docs da rag.py
 import uvicorn
-import os
 
-# Load environment variables
-
-DATABASE_NAME = os.getenv("DATABASE_NAME")
-COLLECTION_NAME = os.getenv("COLLECTION_NAME")
-
-app = FastAPI(title='aistruttore-api', version='0.1', description='API for AIstruttore chatbot')
+app = FastAPI(title='Air-coach api', version='0.2', description='API for AIR Coach application<br />now with Gemini 2.0')
 
 # Add CORS middleware
 
@@ -32,7 +26,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the AIstruttore API"}
+    return {"message": "Welcome to the AIR Coach API"}
 
 
 @app.post("/query")
@@ -63,12 +57,12 @@ async def query_endpoint(request: MessageRequest):
         logger.info("Processing Request")
 
         response_message = ask(request.message, request.userid, stream=False) #, chat_history=chat_history)
-        logger.info(f"Response: {response_message.get('answer', 'No answer available')}")
+        logger.info(f"Response: {response_message.content}")
 
         # Create the response using the MessageResponse model
         message_response = MessageResponse(
             query=request.message,
-            result=response_message.get("answer", "No answer available"),
+            result=response_message.content,
             userid=request.userid
         )
         
@@ -81,13 +75,32 @@ async def query_endpoint(request: MessageRequest):
 @app.post("/stream_query")
 async def stream_endpoint(request: MessageRequest):
     try:
-        stream_response = ask(request.message, request.userid, stream=True)
+        stream_response = ask(request.message, request.userid, chat_history=True, stream=True)
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Exception occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+@app.post("/update_docs")
+async def update_docs_endpoint():
+    """
+    Endpoint that triggers a manual refresh of the document cache and rebuilds the system prompt.
+    Returns information about the updated documents including:
+    - A success message
+    - The total number of documents
+    - Details for each document (title and last modified date)
+    """
+    try:
+        update_result = update_docs()
+        return {
+            "message": update_result["message"],
+            "docs_count": update_result["docs_count"],
+            "docs_details": update_result["docs_details"]
+        }
+    except Exception as e:
+        logger.error(f"Exception occurred while updating docs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/test/", response_model=MessageResponse)
 async def test_endpoint(request: MessageRequest):
     try:

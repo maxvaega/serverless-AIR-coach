@@ -1,6 +1,6 @@
-# AIstruttore API
+# AIR Coach API - v2.0
 
-AIstruttore API is a FastAPI-based application designed for handling chatbot interactions.
+AIR Coach API is a FastAPI-based application designed for handling chatbot interactions.
 
 ## Features
 
@@ -8,6 +8,8 @@ AIstruttore API is a FastAPI-based application designed for handling chatbot int
 - **Streaming Query Endpoint**: Stream responses for long-running queries.
 - **Test Endpoint**: Test the API with a simple request-response mechanism.
 - **CORS Middleware**: Allow cross-origin requests.
+- **LLM Model**: Gemini 2.0 Flash
+- **AWS S3 Context load**: dinamically loads context from .md files hosted in AWS S3
 
 ## Requirements
 
@@ -23,13 +25,8 @@ AIstruttore API is a FastAPI-based application designed for handling chatbot int
 The following environment variables are required to configure the application:
 
 ```
-# Pinecone Configuration
-PINECONE_ENVIRONMENT=<PINECONE_ENVIRONMENT>
-PINECONE_INDEX_NAME=<PINECONE_INDEX_NAME>
-PINECONE_NAMESPACE=<PINECONE_NAMESPACE>
-
-# OpenAI Configuration
-OPENAI_API_KEY=<OPENAI_API_KEY>
+# Google AI Configuration
+GOOGLE_API_KEY=<GOOGLE_API_KEY>
 
 # Langsmith Configuration
 LANGCHAIN_TRACING_V2=<LANGCHAIN_TRACING_V2>
@@ -42,8 +39,10 @@ MONGODB_URI=<MONGODB_URI>
 DATABASE_NAME=<DATABASE_NAME>
 COLLECTION_NAME=<COLLECTION_NAME>
 
-# Environment
-ENV=<ENV>
+# AWS S3 configuration
+AWS_ACCESS_KEY_ID=AWS_ID
+AWS_SECRET_ACCESS_KEY=AWS_Secret
+BUCKET_NAME="bucket-name"
 ```
 
 # Local Test
