@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
@@ -7,6 +7,8 @@ from src.rag import ask, update_docs   # Importa update_docs da rag.py
 import uvicorn
 
 app = FastAPI(title='Air-coach api', version='0.2', description='API for AIR Coach application<br />now with Gemini 2.0')
+
+api_router = APIRouter(prefix="/api")
 
 # Add CORS middleware
 
