@@ -12,6 +12,6 @@
     }
   ],
   "env": {
-      "PYTHONPATH": "src/"
+      "PYTHONPATH": "."
   }
 }
