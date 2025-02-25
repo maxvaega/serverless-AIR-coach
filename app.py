@@ -28,6 +28,9 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to the AIR Coach API"}
 
+@app.get("/api/")
+def read_root():
+    return {"message": "Welcome to the AIR Coach API /api/"}
 
 @app.post("/query")
 async def query_endpoint(request: MessageRequest):
