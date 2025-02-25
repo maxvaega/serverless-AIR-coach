@@ -9,9 +9,13 @@
     {
       "src": "/api/(.*)",
       "dest": "app.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
     }
   ],
   "env": {
-      "PYTHONPATH": "."
+      "PYTHONPATH": "src/"
   }
 }
