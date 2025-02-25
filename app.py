@@ -32,6 +32,12 @@ def read_root():
 def read_root():
     return {"message": "Welcome to the AIR Coach API /api/"}
 
+
+# Aggiungi un endpoint GET per /query (se vuoi testare con GET nel browser)
+@app.get("/query")
+async def query_endpoint_get(): # Rinominato per distinguerlo dal POST, puoi scegliere nomi diversi
+    return {"message": "This is the GET endpoint for /query (for testing)"}
+
 @app.post("/query")
 async def query_endpoint(request: MessageRequest):
     """
