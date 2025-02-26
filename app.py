@@ -6,7 +6,12 @@ from src.models import MessageRequest, MessageResponse
 from src.rag import ask, update_docs   # Importa update_docs da rag.py
 import uvicorn
 
-app = FastAPI(title='Air-coach api', version='0.2', description='API for AIR Coach application<br />now with Gemini 2.0')
+app = FastAPI(
+    title='Air-coach api', 
+    version='0.2', 
+    description='API for AIR Coach application<br />now with Gemini 2.0',
+    docs_url="/api/docs"
+    )
 
 api_router = APIRouter(prefix="/api")
 
@@ -26,15 +31,15 @@ app.add_middleware(
 # FastAPI Endpoints
 #############################################
 
-@app.get("/")
+@api_router.get("/")
 def read_root():
     return {"message": "Welcome to the AIR Coach API /"}
 
-@app.get("/api/")
-def read_root():
-    return {"message": "Welcome to the AIR Coach API /api/"}
+# @app.get("/api/")
+# def read_root():
+#     return {"message": "Welcome to the AIR Coach API /api/"}
 
-@app.post("/api/query")
+@api_router.post("/query")
 async def query_endpoint(request: MessageRequest):
     """
     Endpoint to handle query requests.
@@ -77,7 +82,7 @@ async def query_endpoint(request: MessageRequest):
         logger.error(f"Exception occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/api/stream_query")
+@api_router.post("/stream_query")
 async def stream_endpoint(request: MessageRequest):
     try:
         stream_response = ask(request.message, request.userid, chat_history=True, stream=True)
@@ -86,7 +91,7 @@ async def stream_endpoint(request: MessageRequest):
         logger.error(f"Exception occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/update_docs")
+@api_router.post("/update_docs")
 async def update_docs_endpoint():
     """
     Endpoint that triggers a manual refresh of the document cache and rebuilds the system prompt.
@@ -106,7 +111,7 @@ async def update_docs_endpoint():
         logger.error(f"Exception occurred while updating docs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/api/test/", response_model=MessageResponse)
+@api_router.post("/test/", response_model=MessageResponse)
 async def test_endpoint(request: MessageRequest):
     try:
         # Check if message is empty or contains only whitespace
@@ -132,6 +137,8 @@ async def test_endpoint(request: MessageRequest):
         # Handle unexpected errors
         print(str(e))
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+app.include_router(api_router) # for /api/ prefix
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8080, log_level="info")
