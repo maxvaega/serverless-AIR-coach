@@ -33,11 +33,7 @@ app.add_middleware(
 
 @api_router.get("/")
 def read_root():
-    return {"message": "Welcome to the AIR Coach API /"}
-
-# @app.get("/api/")
-# def read_root():
-#     return {"message": "Welcome to the AIR Coach API /api/"}
+    return {"message": "Welcome to the AIR Coach /API"}
 
 @api_router.post("/query")
 async def query_endpoint(request: MessageRequest):
