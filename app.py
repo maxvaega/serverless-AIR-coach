@@ -28,7 +28,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the AIR Coach API"}
+    return {"message": "Welcome to the AIR Coach API /"}
 
 @app.get("/api/")
 def read_root():
