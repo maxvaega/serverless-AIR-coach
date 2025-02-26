@@ -6,6 +6,7 @@ AIR Coach API is a FastAPI-based application designed for handling chatbot inter
 
 - **Query Endpoint**: Handle query requests and return responses.
 - **Streaming Query Endpoint**: Stream responses for long-running queries.
+- **Docs update Endpoint**: refreshes the docs in cache to updated the LLM context
 - **Test Endpoint**: Test the API with a simple request-response mechanism.
 - **CORS Middleware**: Allow cross-origin requests.
 - **LLM Model**: Gemini 2.0 Flash
