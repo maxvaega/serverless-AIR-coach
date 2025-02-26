@@ -34,13 +34,7 @@ def read_root():
 def read_root():
     return {"message": "Welcome to the AIR Coach API /api/"}
 
-
-# Aggiungi un endpoint GET per /query (se vuoi testare con GET nel browser)
-@app.get("/query")
-async def query_endpoint_get(): # Rinominato per distinguerlo dal POST, puoi scegliere nomi diversi
-    return {"message": "This is the GET endpoint for /query (for testing)"}
-
-@app.post("/query")
+@app.post("/api/query")
 async def query_endpoint(request: MessageRequest):
     """
     Endpoint to handle query requests.
@@ -83,7 +77,7 @@ async def query_endpoint(request: MessageRequest):
         logger.error(f"Exception occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/stream_query")
+@app.post("/api/stream_query")
 async def stream_endpoint(request: MessageRequest):
     try:
         stream_response = ask(request.message, request.userid, chat_history=True, stream=True)
@@ -92,7 +86,7 @@ async def stream_endpoint(request: MessageRequest):
         logger.error(f"Exception occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/update_docs")
+@app.post("/api/update_docs")
 async def update_docs_endpoint():
     """
     Endpoint that triggers a manual refresh of the document cache and rebuilds the system prompt.
@@ -112,7 +106,7 @@ async def update_docs_endpoint():
         logger.error(f"Exception occurred while updating docs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/test/", response_model=MessageResponse)
+@app.post("/api/test/", response_model=MessageResponse)
 async def test_endpoint(request: MessageRequest):
     try:
         # Check if message is empty or contains only whitespace
