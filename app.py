@@ -3,7 +3,10 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest, MessageResponse
-from src.rag import ask, update_docs   # Importa update_docs da rag.py
+from src.rag import ask, update_docs
+from src.auth0 import get_user_metadata
+from src.utils import format_user_metadata
+from src.cache import set_cached_user_data
 import uvicorn
 
 app = FastAPI(
@@ -142,13 +145,8 @@ async def user_query_endpoint(user_id: str):
     :param user_id: L'ID dell'utente.
     :return: Dati utente grezzi e stringa formattata.
     """
-    from src.auth0 import get_user_metadata
-    from src.utils import format_user_metadata
-    from src.cache import set_cached_user_data
-
     try:
         # Recupera i metadata dall'API di Auth0
-        logger.info(f"Requested user data for: {user_id}")
         user_metadata = get_user_metadata(user_id)
         if not user_metadata:
             raise HTTPException(status_code=404, detail="User metadata not found")
