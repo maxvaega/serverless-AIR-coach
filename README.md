@@ -11,6 +11,7 @@ AIR Coach API is a FastAPI-based application designed for handling chatbot inter
 - **CORS Middleware**: Allow cross-origin requests.
 - **LLM Model**: Gemini 2.0 Flash
 - **AWS S3 Context load**: dinamically loads context from .md files hosted in AWS S3
+- **User information**: reads data from auth0 to add to the LLM context window
 
 ## Requirements
 
@@ -44,6 +45,10 @@ COLLECTION_NAME=<COLLECTION_NAME>
 AWS_ACCESS_KEY_ID=AWS_ID
 AWS_SECRET_ACCESS_KEY=AWS_Secret
 BUCKET_NAME="bucket-name"
+
+# Auth0 configuration
+AUTH0_DOMAIN=AUTH0_DOMAIN
+AUTH0_API_TOKEN=AUTH0_API_TOKEN
 ```
 
 # Local Test
