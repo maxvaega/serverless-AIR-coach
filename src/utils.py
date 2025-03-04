@@ -1,4 +1,5 @@
 from typing import Dict
+import datetime
 
 def format_user_metadata(user_metadata: Dict) -> str:
     """
@@ -8,7 +9,11 @@ def format_user_metadata(user_metadata: Dict) -> str:
     :return: Stringa formattata con le informazioni dell'utente.
     """
     if not user_metadata:
-        return ""
+        date = datetime.datetime.now().strftime("%Y-%m-%d")
+        if date:
+            formatted_data = f"\nOggi è il {date}\n"
+    
+        return formatted_data
     
     formatted_data = "I dati che l’utente ti ha fornito su di sè sono:\n"
     
@@ -53,5 +58,9 @@ def format_user_metadata(user_metadata: Dict) -> str:
     sex = user_metadata.get("sex")
     if sex:
         formatted_data += f"Sesso: {sex}\n"
+
+    date = datetime.datetime.now().strftime("%Y-%m-%d")
+    if date:
+        formatted_data += f"\nOggi è il {date}\n"
     
     return formatted_data

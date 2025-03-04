@@ -51,6 +51,9 @@ def get_user_metadata(user_id: str) -> dict:
     :param user_id: L'ID dell'utente.
     :return: Dizionario contenente i metadata dell'utente.
     """
+    if user_id == "string" or not user_id:
+        logger.info(f"Auth0: user id fornito non valido: {user_id}")
+        return {}
     token = get_auth0_token()
     if not token:
         logger.error("Auth0: Impossibile ottenere il token. Non è possibile recuperare i metadata utente.")
@@ -67,5 +70,5 @@ def get_user_metadata(user_id: str) -> dict:
         user_data = response.json()
         return user_data.get("user_metadata", {})
     except requests.exceptions.RequestException as e:
-        logger.error(f"Auth0: Errore nella chiamata API di Auth0: {e}")
+        logger.error(f"Auth0: Errore nella chiamata API di Auth0 per l'userid {user_id}: {e}")
         return {}
