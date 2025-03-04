@@ -143,9 +143,11 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
     if user_data:
         # Recupera i dati utente dalla cache
         user_info = get_cached_user_data(user_id)
+        # logger.info(f"user_info: {user_info}")
         if not user_info:
             # Recupera i metadata da Auth0
             user_metadata = get_user_metadata(user_id)
+            # logger.info(f"user_metadata: {user_metadata}")
             # Formatta i metadata
             user_info = format_user_metadata(user_metadata)
             # Salva nella cache
