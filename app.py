@@ -134,6 +134,36 @@ async def test_endpoint(request: MessageRequest):
         print(str(e))
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+# Test endpoint to simulate a long processing time
+@api_router.post("/stream_lag")
+async def stream_lag_endpoint(request: MessageRequest):
+    """
+    Test endpoint that start the reply after 40 seconds.
+    Useful for testing frontend behavior with very slow responses.
+    
+    Args:
+        request (MessageRequest): The request object containing the message and userid
+        
+    Returns:
+        StreamingResponse: Delayed streaming response after 40 seconds
+    """
+    import asyncio
+    try:
+        # Simulate a long processing time
+        wait_time = 29
+        logger.info(f"Waiting {wait_time} seconds...")
+        await asyncio.sleep(wait_time)
+        logger.info("Wait complete, starting response")
+        
+        # Then proceed with normal streaming response
+        stream_response = ask(request.message, request.userid, chat_history=True, stream=True)
+        return StreamingResponse(stream_response, media_type="text/event-stream")
+    except Exception as e:
+        logger.error(f"Exception occurred in stream_lag endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ...existing code...
+
 app.include_router(api_router) # for /api/ prefix
 
 if __name__ == "__main__":

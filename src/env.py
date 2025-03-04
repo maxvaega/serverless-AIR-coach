@@ -1,8 +1,11 @@
-
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# # Add debug info
+# print("Current working directory:", os.getcwd())
+# print("Loading .env file...")
+
+load_dotenv(override=True)  # Add override=True to force reload
 
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
