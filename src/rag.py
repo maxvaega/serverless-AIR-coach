@@ -8,6 +8,11 @@ from .database import get_data, ensure_indexes
 import boto3
 import threading
 
+from .auth0 import get_user_metadata
+from .utils import format_user_metadata
+from .cache import get_cached_user_data, set_cached_user_data
+from typing import Optional
+
 s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 _docs_cache = {
     "content": None,
@@ -117,7 +122,7 @@ llm = ChatGoogleGenerativeAI(
 
 ensure_indexes(DATABASE_NAME, COLLECTION_NAME)
 
-def ask(query, user_id, chat_history=False, stream=False):
+def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False):
     """
     Processes a user query and returns a response, optionally streaming the response.
 
@@ -134,7 +139,20 @@ def ask(query, user_id, chat_history=False, stream=False):
     :return: The response to the query, either as a single result or a generator for streaming.
     """
     messages = [SystemMessage(system_prompt)]
-
+    
+    if user_data:
+        # Recupera i dati utente dalla cache
+        user_info = get_cached_user_data(user_id)
+        if not user_info:
+            # Recupera i metadata da Auth0
+            user_metadata = get_user_metadata(user_id)
+            # Formatta i metadata
+            user_info = format_user_metadata(user_metadata)
+            # Salva nella cache
+            set_cached_user_data(user_id, user_info)
+        if user_info:
+            messages.append(AIMessage(user_info))
+    
     history_limit = 10
     if chat_history:
         history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)

@@ -3,7 +3,10 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest, MessageResponse
-from src.rag import ask, update_docs   # Importa update_docs da rag.py
+from src.rag import ask, update_docs
+from src.auth0 import get_user_metadata
+from src.utils import format_user_metadata
+from src.cache import set_cached_user_data
 import uvicorn
 
 app = FastAPI(
@@ -81,7 +84,7 @@ async def query_endpoint(request: MessageRequest):
 @api_router.post("/stream_query")
 async def stream_endpoint(request: MessageRequest):
     try:
-        stream_response = ask(request.message, request.userid, chat_history=True, stream=True)
+        stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Exception occurred: {str(e)}")
@@ -133,6 +136,34 @@ async def test_endpoint(request: MessageRequest):
         # Handle unexpected errors
         print(str(e))
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@api_router.post("/user_query")
+async def user_query_endpoint(user_id: str):
+    """
+    Endpoint that retrieves and formats user metadata from Auth0.
+
+    :param user_id: L'ID dell'utente.
+    :return: Dati utente grezzi e stringa formattata.
+    """
+    try:
+        # Recupera i metadata dall'API di Auth0
+        user_metadata = get_user_metadata(user_id)
+        if not user_metadata:
+            raise HTTPException(status_code=404, detail="User metadata not found")
+        
+        # Formatta i metadata
+        formatted_data = format_user_metadata(user_metadata)
+        
+        # Salva nella cache, sovrascrivendo eventuali dati esistenti
+        set_cached_user_data(user_id, formatted_data)
+        
+        return {
+            "user_metadata": user_metadata,
+            "formatted_data": formatted_data
+        }
+    except Exception as e:
+        logger.error(f"Errore nell'elaborazione della richiesta user_query: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 app.include_router(api_router) # for /api/ prefix
 
