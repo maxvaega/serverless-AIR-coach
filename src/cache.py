@@ -4,8 +4,8 @@
 from cachetools import TTLCache
 from typing import Dict
 
-# Cache per i dati utente con TTL di 300 secondi (5 minuti)
-user_metadata_cache = TTLCache(maxsize=1000, ttl=300)
+# Cache per i dati utente con TTL di 600 secondi (10 minuti)
+user_metadata_cache = TTLCache(maxsize=1000, ttl=600)
 
 def get_cached_user_data(user_id: str) -> str:
     """

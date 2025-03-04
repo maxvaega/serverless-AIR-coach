@@ -1,7 +1,6 @@
 import requests
 from .env import AUTH0_DOMAIN, AUTH0_API_TOKEN
 from .logging_config import logger
-import json
 
 def get_user_metadata(user_id: str) -> dict:
     """

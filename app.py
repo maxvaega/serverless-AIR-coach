@@ -148,7 +148,7 @@ async def user_query_endpoint(user_id: str):
 
     try:
         # Recupera i metadata dall'API di Auth0
-        logger.info(user_id)
+        logger.info(f"Requested user data for: {user_id}")
         user_metadata = get_user_metadata(user_id)
         if not user_metadata:
             raise HTTPException(status_code=404, detail="User metadata not found")
