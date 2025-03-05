@@ -21,7 +21,7 @@ api_router = APIRouter(prefix="/api")
 
 # Add CORS middleware
 
-origins = ["http://localhost", "http://localhost:8080"]
+origins = ["http://localhost", "http://localhost:8080", "http://localhost:8081"]
 
 app.add_middleware(
     CORSMiddleware,
