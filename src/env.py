@@ -18,3 +18,5 @@ CACHE_TTL = 300
 
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
 AUTH0_SECRET = os.getenv("AUTH0_SECRET")
+
+is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"

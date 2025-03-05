@@ -1,5 +1,6 @@
 from typing import Dict
 import datetime
+import re
 
 def format_user_metadata(user_metadata: Dict) -> str:
     """
@@ -64,3 +65,19 @@ def format_user_metadata(user_metadata: Dict) -> str:
         formatted_data += f"\nOggi è il {date}\n"
     
     return formatted_data
+
+# controlli per autenticazione user_id
+def validate_user_id(user_id):
+    # Regex per auth0
+    auth0_pattern = r'^auth0\|[0-9a-fA-F]{24}$'
+
+    # Regex per google-oauth2
+    google_pattern = r'^google-oauth2\|[0-9]{15,25}$'
+
+    # Controlla se il campo corrisponde a uno dei due pattern
+    if re.match(auth0_pattern, user_id):
+        return True
+    elif re.match(google_pattern, user_id):
+        return True
+    else:
+        return False
