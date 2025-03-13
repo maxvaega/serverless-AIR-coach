@@ -1,15 +1,22 @@
 {
+  "version": 2,
   "builds": [
     {
-      "src": "app.py",
+      "src": "app/main.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "app.py" },
-    { "src": "/(.*)", "dest": "app.py" }
+    {
+      "src": "/(.*)",
+      "dest": "app/main.py"
+    }
   ],
   "env": {
-      "PYTHONPATH": "."
+    "APP_NAME": "Dynamic Agent Backend",
+    "APP_VERSION": "1.0.0",
+    "APP_DESCRIPTION": "A robust backend system for creating and managing AI agents using LangGraph and FastAPI",
+    "LOG_LEVEL": "INFO"
   }
 }
+
