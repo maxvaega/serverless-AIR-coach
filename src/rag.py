@@ -106,7 +106,8 @@ def update_docs():
         return {
             "message": "Document cache and system prompt updated successfully.",
             "docs_count": docs_count,
-            "docs_details": docs_details
+            "docs_details": docs_details,
+            "system_prompt": system_prompt
         }
 
 # Load Documents from S3 on load to build prompt
@@ -197,3 +198,25 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
                 logger.error(f"An error occurred while inserting the data into the collection: {e}")
         return stream_response()
 
+def create_prompt_file(system_prompt: str):
+    """
+    Creates a prompt file with the given system prompt.
+
+    :param system_prompt: The system prompt to write to the file in AWS S3
+    """
+    s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+    s3_key = "docs/system_prompt.md"
+
+    try:
+        file = s3_client.put_object(
+            Bucket=BUCKET_NAME,
+            Key=s3_key,
+            Body=system_prompt,
+            ContentType='text/markdown'
+        )
+        logger.info(f"System prompt salvato con successo in S3: s3://{BUCKET_NAME}/{s3_key}")
+        return file
+    except Exception as s3_error:
+        logger.error(f"Errore nel salvare su S3: {str(s3_error)}")
+        # Decidi se vuoi gestire l'errore S3 in modo specifico o lasciare che venga catturato
+        # dal try/except esterno

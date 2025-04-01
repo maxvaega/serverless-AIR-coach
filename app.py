@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest, MessageResponse
-from src.rag import ask, update_docs
+from src.rag import ask, update_docs, create_prompt_file
 from src.auth0 import get_user_metadata
 from src.utils import format_user_metadata, validate_user_id
 from src.cache import set_cached_user_data
@@ -57,12 +57,24 @@ async def update_docs_endpoint():
     - The total number of documents
     - Details for each document (title and last modified date)
     """
+    import json
     try:
         update_result = update_docs()
+        system_prompt = json.loads(json.dumps(update_result["system_prompt"]).replace('\n', '\\n'))
+        
+        try:
+            file = create_prompt_file(system_prompt)
+            # logger.info(f"Prompt file created: {file}")
+        except Exception as file_error:
+            logger.error(f"Error creating prompt file: {str(file_error)}")
+            raise HTTPException(status_code=500, detail="Error creating prompt file")
+        
         return {
             "message": update_result["message"],
             "docs_count": update_result["docs_count"],
-            "docs_details": update_result["docs_details"]
+            "docs_details": update_result["docs_details"],
+            "prompt_file": file,
+            "system_prompt": system_prompt
         }
     except Exception as e:
         logger.error(f"Exception occurred while updating docs: {str(e)}")
