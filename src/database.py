@@ -1,122 +1,109 @@
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
-from .env import URI
+from .env import *
 from .logging_config import logger
+import boto3
+from botocore.exceptions import ClientError
+import time
+from typing import Dict, Optional
 
-if not URI:
-    raise ValueError("No MongoDB URI found. Please set the MONGODB_URI environment variable.")
-
-try:
-    # Create a new client and connect to the server
-    client = MongoClient(URI, server_api=ServerApi('1'))
-    # logger.info("Connected to MongoDB successfully.") # Antonio sistemalo
-except Exception as e:
-    print(f"An error occurred while connecting to MongoDB: {e}")
-    
-def get_collection(database_name, collection_name):
+class DynamoDBConversationHandler:
+    def __init__(self, table_name: str = DYNAMODB_TABLE_NAME, region: str = AWS_REGION):
         """
-        Get a collection from the MongoDB database.
+        Inizializza il handler dynamoDB con il nome della tabella e la regione
+        """
+        self.dynamodb = boto3.resource('dynamodb', region_name=region)
+        self.table = self.dynamodb.Table(table_name)
+
+    def insert_conversation(self, data: Dict) -> Dict:
+        """
+        Inserisce una conversazione in DynamoDB
+        """
+        try:
+            # Verifica che data non sia None e sia un dizionario
+            if not isinstance(data, dict):
+                raise ValueError("Error while inserting conversation data to dyamoDB: Data must be a dictionary")
+
+            # Inserimento in DynamoDB
+            result = self.table.put_item(
+                Item=data,
+                ReturnValues='NONE'  # Non restituire l'elemento inserito
+            )
+
+            return {
+                'success': True,
+                'message': 'Conversation inserted successfully',
+                'response': result
+            }
+
+        except ClientError as e:
+            logger.error(f"ClientError: {e.response['Error']['Message']}")
+            return {
+                'success': False,
+                'message': f"DynamoDB ClientError: {e.response['Error']['Message']}",
+                'error': str(e)
+            }
+        except Exception as e:
+            logger.error(f"Exception: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Error inserting conversation: {str(e)}',
+                'error': str(e)
+            }
         
-        :param database_name: Name of the database
-        :param collection_name: Name of the collection
-        :return: Collection object
+    def prepare_data(salf, query: str, response: str, user_id: str) -> dict:
         """
-        db = client[database_name]
-        collection = db[collection_name]
-        return collection
+        Prepara i dati nel formato corretto per DynamoDB
+        """
+        data = {
+            'user_id': str(user_id),                   # String semplice
+            'timestamp': int(time.time() * 1000),      # Timestamp in millisecondi (migliore per ordinamento in DynamoDB) - deve essere tipo number
+            'human': str(query),                       # String semplice
+            'system': str(response)                    # String semplice
+        }
 
-def insert_data(database_name, collection_name, data):
-    """
-    Insert data into a MongoDB collection.
+        return data
     
-    :param database_name: Name of the database
-    :param collection_name: Name of the collection
-    :param data: Data to be inserted (dictionary or list of dictionaries)
-    :return: Inserted IDs
-    """
-    collection = get_collection(database_name, collection_name)
-    if isinstance(data, list):
-        result = collection.insert_many(data)
-    else:
-        result = collection.insert_one(data)
-    return result.inserted_ids if isinstance(data, list) else result.inserted_id
+    def get_data(self, user_id: str, limit: Optional[int] = 10) -> list:
+        """
+        Recupera i dati da DynamoDB per un utente specifico, ordinati per timestamp
+        in ordine ascendente (dal più vecchio al più recente).
+        
+        Args:
+            user_id (str): ID dell'utente di cui recuperare le conversazioni
+            limit (Optional[int]): Numero massimo di documenti da restituire
+        
+        Returns:
+            list: Lista di conversazioni ordinate per timestamp ascendente
+        """
+        try:
+            # Query parameters
+            query_params = {
+                'KeyConditionExpression': '#uid = :user_id',
+                'ExpressionAttributeNames': {
+                    '#uid': 'user_id'
+                },
+                'ExpressionAttributeValues': {
+                    ':user_id': str(user_id)
+                },
+                'ScanIndexForward': False  # Per ordinare in ordine decrescente (più recenti prima)
+            }
 
-def create_collection(database_name, collection_name):
-    """
-    Create a new collection in the MongoDB database.
-    
-    :param database_name: Name of the database
-    :param collection_name: Name of the collection
-    :return: Collection object
-    """
-    db = client[database_name]
-    collection = db.create_collection(collection_name)
-    return collection
+            # Aggiungi il limit se specificato
+            query_params['Limit'] = limit
 
-def drop_collection(database_name, collection_name):
-    """
-    Drop a collection from the MongoDB database.
-    
-    :param database_name: Name of the database
-    :param collection_name: Name of the collection
-    :return: True if successful, False otherwise
-    """
-    db = client[database_name]
-    try:
-        db.drop_collection(collection_name)
-        return True
-    except Exception as e:
-        print(f"An error occurred while dropping the collection: {e}")
-        return False
-    
-def get_data(database_name, collection_name, filters=None, keys=None, limit=None):
-    """
-    Get data from a MongoDB collection based on multiple key-value pairs and specify which keys to include in the result.
-    
-    :param database_name: Name of the database
-    :param collection_name: Name of the collection
-    :param filters: Dictionary of key-value pairs to filter the data (optional)
-    :param keys: Dictionary specifying which keys to include or exclude in the result (optional)
-    :param limit: Number of documents to return (optional)
-    :return: List of documents ordered by timestamp ascending (oldest first)
-    """
-    collection = get_collection(database_name, collection_name)
-    query = filters if filters else {}
-    projection = keys if keys else None
-    
-    # Get documents with limit and sort in a single query
-    # Using hint() to ensure the use of timestamp index if available
-    cursor = collection.find(
-        query, 
-        projection
-    ).sort(
-        "timestamp", -1  # First sort descending
-    ).limit(
-        limit if limit else 0  # Apply limit in the query
-    ).hint("timestamp_-1") if limit else collection.find(
-        query, 
-        projection
-    ).sort("timestamp", -1)
-    
-    # Convert to list and reverse to get ascending order (oldest first)
-    documents = list(cursor)
-    documents.reverse()
-    
-    return documents
+            # Esegui la query
+            response = self.table.query(**query_params)
+            
+            # Estrai gli items
+            items = response.get('Items', [])
+            
+            # Reverse per ottenere ordine ascendente
+            items.reverse()
+            
+            return items
 
-def ensure_indexes(database_name, collection_name):
-    """
-    La funzione ensure_indexes serve a garantire che un indice specifico 
-    (in questo caso sull'attributo timestamp in ordine decrescente) esista su una collezione MongoDB. 
-    L'operazione è definitiva e non deve essere ripetuta ogni volta, 
-    ma può essere utile richiamarla durante l'inizializzazione dell'applicazione per assicurarsi che 
-    gli indici siano correttamente configurati.
-    """
-    collection = get_collection(database_name, collection_name)
-    try:
-        index_name = collection.create_index([("timestamp", -1)], background=True)
-        logger.info(f"MongoDB: Index '{index_name}' created successfully on collection {collection_name}")
-    except Exception as e:
-        logger.error(f"MongoDB: Error creating index on collection {collection_name}: {e}")
-
-
+        except ClientError as e:
+            logger.error(f"DynamoDB ClientError in get_data: {e.response['Error']['Message']}")
+            return []
+        except Exception as e:
+            logger.error(f"Error in get_data: {str(e)}")
+            return []

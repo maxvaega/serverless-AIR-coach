@@ -4,7 +4,7 @@ from .logging_config import logger
 import datetime
 from .env import *
 import json
-from .database import get_data, ensure_indexes
+from .database import DynamoDBConversationHandler
 import boto3
 import threading
 
@@ -20,6 +20,9 @@ _docs_cache = {
     "timestamp": None 
 }
 update_docs_lock = threading.Lock()  # Lock per sincronizzare gli aggiornamenti manuali
+
+# Inizializza il client DynamoDB
+dynamodb_handler = DynamoDBConversationHandler()
 
 def fetch_docs_from_s3():
     """
@@ -121,8 +124,6 @@ llm = ChatGoogleGenerativeAI(
     temperature=1,
 )
 
-ensure_indexes(DATABASE_NAME, COLLECTION_NAME)
-
 def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False):
     """
     Processes a user query and returns a response, optionally streaming the response.
@@ -131,7 +132,7 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
     and generates a response. If chat history is provided, it extends the messages with the
     chat history and appends the new query. The function supports both synchronous and
     asynchronous streaming of responses. In streaming mode, it yields chunks of data and
-    inserts the final response into a MongoDB collection.
+    inserts the final response into the database.
 
     :param query: The user query to process.
     :param user_id: The ID of the user making the query.
@@ -156,9 +157,11 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
         if user_info:
             messages.append(AIMessage(user_info))
     
-    history_limit = 10
+    # Recupera la cronologia della chat da DynamoDB
+    global dynamodb_handler
     if chat_history:
-        history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
+        history_limit = 10
+        history = dynamodb_handler.get_data(user_id=user_id, limit=history_limit)
         for msg in history:
             messages.append(HumanMessage(msg["human"]))
             messages.append(AIMessage(msg["system"]))
@@ -168,7 +171,6 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
     if not stream:
         return llm.invoke(messages)
     else:
-        from .database import insert_data
         response_chunks = []
 
         async def stream_response():
@@ -182,20 +184,15 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
                 except Exception as e:
                     logger.error(f"An error occurred while streaming the events: {e}")
 
-# Insert the data into the MongoDB collection
+            # Insert the data into the DynamoDB table
             response = "".join(response_chunks)
+            
+            data = dynamodb_handler.prepare_data(query=query, response=response, user_id=user_id)
             try:
-                data = {
-                    "human": query,
-                    "system": response,
-                    "userId": user_id,
-                    "llm": model,
-                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                logger.info(f"Data inserted into the collection: {COLLECTION_NAME}")
+                insert = dynamodb_handler.insert_conversation(data)
+                # logger.info(f"Insert operation result: {insert}")
             except Exception as e:
-                logger.error(f"An error occurred while inserting the data into the collection: {e}")
+                logger.error(f"An error occurred while inserting the conversation data to DynamoDB: {e}")
         return stream_response()
 
 def create_prompt_file(system_prompt: str):
