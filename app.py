@@ -10,6 +10,11 @@ from src.cache import set_cached_user_data
 from src.env import is_production
 import uvicorn
 
+from fastapi import FastAPI, Security
+from src.auth import VerifyToken
+
+auth = VerifyToken()
+
 app = FastAPI(
     title='Air-coach api', 
     version='0.2', 
@@ -34,6 +39,11 @@ app.add_middleware(
 #############################################
 # FastAPI Endpoints
 #############################################
+
+@app.get("/api/private")
+def private(auth_result: str = Security(auth.verify)): # 👈 Use Security and the verify method to protect your endpoints
+    """A valid access token is required to access this route"""
+    return auth_result
 
 @api_router.post("/stream_query")
 async def stream_endpoint(request: MessageRequest):
