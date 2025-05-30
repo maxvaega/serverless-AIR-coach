@@ -56,7 +56,7 @@ AUTH0_SECRET=AUTH0_SECRET
 ## FastAPI
 
 ```sh
-python app.py
+uvicorn app:app --reload
 
 # Example output
 2025-02-07 11:32:43,980 [INFO] Connected to MongoDB successfully.
@@ -64,6 +64,7 @@ INFO:     Started server process [67877]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:     Started reloader process [31094] using StatReload
 
 ```
 

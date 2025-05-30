@@ -24,6 +24,7 @@ AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
 AUTH0_SECRET = os.getenv("AUTH0_SECRET")
 
 is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+# print(f"Running in {'production' if is_production else 'development'} mode")
 
 auth0_domain = os.getenv("AUTH0_DOMAIN", "your-auth0-domain")
 auth0_api_audience = os.getenv("AUTH0_API_AUDIENCE", "your-auth0-api-audience")
