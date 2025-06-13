@@ -104,7 +104,8 @@ def get_data(database_name, collection_name, filters=None, keys=None, limit=None
     
     return documents
 
-def ensure_indexes(database_name, collection_name):
+# Funzione attualmente non utilizzata, serve per garantire che l'indice venga creato sul db (ma non serve ripeterlo ogni volta)
+def ensure_indexes(database_name, collection_name): 
     """
     La funzione ensure_indexes serve a garantire che un indice specifico 
     (in questo caso sull'attributo timestamp in ordine decrescente) esista su una collezione MongoDB. 

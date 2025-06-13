@@ -2,13 +2,15 @@ from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
-from src.models import MessageRequest, MessageResponse
-from src.rag import ask, update_docs
-from src.auth0 import get_user_metadata
-from src.utils import format_user_metadata, validate_user_id
-from src.cache import set_cached_user_data
+from src.models import MessageRequest #, MessageResponse
+from src.rag import ask, update_docs, create_prompt_file
 from src.env import is_production
 import uvicorn
+
+from fastapi import FastAPI, Security
+from src.auth import VerifyToken
+
+auth = VerifyToken()
 
 app = FastAPI(
     title='Air-coach api', 
@@ -21,7 +23,7 @@ api_router = APIRouter(prefix="/api")
 
 # Add CORS middleware
 
-origins = ["http://localhost", "http://localhost:8080"]
+origins = ["http://localhost", "http://localhost:8080", "http://localhost:8081"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,10 +38,10 @@ app.add_middleware(
 #############################################
 
 @api_router.post("/stream_query")
-async def stream_endpoint(request: MessageRequest):
-    if not validate_user_id(request.userid):
-        logger.error("Unauthorized")
-        raise HTTPException(status_code=401, detail="Unauthorized")
+async def stream_endpoint(
+    request: MessageRequest,
+    auth_result: dict = Security(auth.verify)
+):
     
     try:
         stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
@@ -57,46 +59,60 @@ async def update_docs_endpoint():
     - The total number of documents
     - Details for each document (title and last modified date)
     """
+    import json
     try:
         update_result = update_docs()
+        system_prompt = json.loads(json.dumps(update_result["system_prompt"]).replace('\n', '\\n'))
+        
+        try:
+            file = create_prompt_file(system_prompt)
+            # logger.info(f"Prompt file created: {file}")
+        except Exception as file_error:
+            logger.error(f"Error creating prompt file: {str(file_error)}")
+            raise HTTPException(status_code=500, detail="Error creating prompt file")
+        
         return {
             "message": update_result["message"],
             "docs_count": update_result["docs_count"],
-            "docs_details": update_result["docs_details"]
+            "docs_details": update_result["docs_details"],
+            "prompt_file": file,
+            "system_prompt": system_prompt
         }
     except Exception as e:
         logger.error(f"Exception occurred while updating docs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    
-@api_router.post("/user_query")
-async def user_query_endpoint(user_id: str):
-    """
-    Endpoint that retrieves and formats user metadata from Auth0.
 
-    :param user_id: L'ID dell'utente.
-    :return: Dati utente grezzi e stringa formattata.
-    """
-    try:
-        # Recupera i metadata dall'API di Auth0
-        user_metadata = get_user_metadata(user_id)
-        if not user_metadata:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        
-        # Formatta i metadata
-        formatted_data = format_user_metadata(user_metadata)
-        
-        # Salva nella cache, sovrascrivendo eventuali dati esistenti
-        set_cached_user_data(user_id, formatted_data)
-        
-        return {
-            "user_metadata": user_metadata,
-            "formatted_data": formatted_data
-        }
-    except Exception as e:
-        logger.error(f"Errore nell'elaborazione della richiesta user_query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+app.include_router(api_router) # for /api/ prefix
 
 # Endpoint rimossi
+
+# @api_router.post("/user_query")
+# async def user_query_endpoint(user_id: str):
+#     """
+#     Endpoint that retrieves and formats user metadata from Auth0.
+
+#     :param user_id: L'ID dell'utente.
+#     :return: Dati utente grezzi e stringa formattata.
+#     """
+#     try:
+#         # Recupera i metadata dall'API di Auth0
+#         user_metadata = get_user_metadata(user_id)
+#         if not user_metadata:
+#             raise HTTPException(status_code=401, detail="Unauthorized")
+        
+#         # Formatta i metadata
+#         formatted_data = format_user_metadata(user_metadata)
+        
+#         # Salva nella cache, sovrascrivendo eventuali dati esistenti
+#         set_cached_user_data(user_id, formatted_data)
+        
+#         return {
+#             "user_metadata": user_metadata,
+#             "formatted_data": formatted_data
+#         }
+#     except Exception as e:
+#         logger.error(f"Errore nell'elaborazione della richiesta user_query: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 # @api_router.get("/")
 # def read_root():
@@ -171,9 +187,6 @@ async def user_query_endpoint(user_id: str):
 #         # Handle unexpected errors
 #         print(str(e))
 #         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-
-app.include_router(api_router) # for /api/ prefix
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8080, log_level="info")
