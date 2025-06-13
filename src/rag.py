@@ -189,7 +189,6 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
                     "human": query,
                     "system": response,
                     "userId": user_id,
-                    "llm": model,
                     "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 insert_data(DATABASE_NAME, COLLECTION_NAME, data)
