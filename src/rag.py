@@ -4,7 +4,7 @@ from .logging_config import logger
 import datetime
 from .env import *
 import json
-from .database import get_data, ensure_indexes
+from .database import get_data #, ensure_indexes
 import boto3
 import threading
 
@@ -121,7 +121,7 @@ llm = ChatGoogleGenerativeAI(
     temperature=1,
 )
 
-ensure_indexes(DATABASE_NAME, COLLECTION_NAME)
+# ensure_indexes(DATABASE_NAME, COLLECTION_NAME)
 
 def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False):
     """

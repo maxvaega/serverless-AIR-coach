@@ -2,11 +2,8 @@ from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
-from src.models import MessageRequest, MessageResponse
+from src.models import MessageRequest #, MessageResponse
 from src.rag import ask, update_docs, create_prompt_file
-from src.auth0 import get_user_metadata
-from src.utils import format_user_metadata, validate_user_id
-from src.cache import set_cached_user_data
 from src.env import is_production
 import uvicorn
 
@@ -40,16 +37,11 @@ app.add_middleware(
 # FastAPI Endpoints
 #############################################
 
-@app.get("/api/private")
-def private(auth_result: str = Security(auth.verify)): # 👈 Use Security and the verify method to protect your endpoints
-    """A valid access token is required to access this route"""
-    return auth_result
-
 @api_router.post("/stream_query")
-async def stream_endpoint(request: MessageRequest):
-    if not validate_user_id(request.userid):
-        logger.error("Unauthorized")
-        raise HTTPException(status_code=401, detail="Unauthorized")
+async def stream_endpoint(
+    request: MessageRequest,
+    auth_result: dict = Security(auth.verify)
+):
     
     try:
         stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
@@ -89,36 +81,38 @@ async def update_docs_endpoint():
     except Exception as e:
         logger.error(f"Exception occurred while updating docs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    
-@api_router.post("/user_query")
-async def user_query_endpoint(user_id: str):
-    """
-    Endpoint that retrieves and formats user metadata from Auth0.
 
-    :param user_id: L'ID dell'utente.
-    :return: Dati utente grezzi e stringa formattata.
-    """
-    try:
-        # Recupera i metadata dall'API di Auth0
-        user_metadata = get_user_metadata(user_id)
-        if not user_metadata:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        
-        # Formatta i metadata
-        formatted_data = format_user_metadata(user_metadata)
-        
-        # Salva nella cache, sovrascrivendo eventuali dati esistenti
-        set_cached_user_data(user_id, formatted_data)
-        
-        return {
-            "user_metadata": user_metadata,
-            "formatted_data": formatted_data
-        }
-    except Exception as e:
-        logger.error(f"Errore nell'elaborazione della richiesta user_query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+app.include_router(api_router) # for /api/ prefix
 
 # Endpoint rimossi
+
+# @api_router.post("/user_query")
+# async def user_query_endpoint(user_id: str):
+#     """
+#     Endpoint that retrieves and formats user metadata from Auth0.
+
+#     :param user_id: L'ID dell'utente.
+#     :return: Dati utente grezzi e stringa formattata.
+#     """
+#     try:
+#         # Recupera i metadata dall'API di Auth0
+#         user_metadata = get_user_metadata(user_id)
+#         if not user_metadata:
+#             raise HTTPException(status_code=401, detail="Unauthorized")
+        
+#         # Formatta i metadata
+#         formatted_data = format_user_metadata(user_metadata)
+        
+#         # Salva nella cache, sovrascrivendo eventuali dati esistenti
+#         set_cached_user_data(user_id, formatted_data)
+        
+#         return {
+#             "user_metadata": user_metadata,
+#             "formatted_data": formatted_data
+#         }
+#     except Exception as e:
+#         logger.error(f"Errore nell'elaborazione della richiesta user_query: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 # @api_router.get("/")
 # def read_root():
@@ -193,9 +187,6 @@ async def user_query_endpoint(user_id: str):
 #         # Handle unexpected errors
 #         print(str(e))
 #         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-
-app.include_router(api_router) # for /api/ prefix
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8080, log_level="info")
