@@ -58,12 +58,5 @@ class VerifyToken:
         except Exception as error:
             raise UnauthorizedException(str(error))
     
-        return payload
-
-def __init__(self):
-        self.config = get_settings()
-
-        # This gets the JWKS from a given URL and does processing so you can
-        # use any of the keys available
-        jwks_url = f'https://{self.config.auth0_domain}/.well-known/jwks.json'
-        self.jwks_client = jwt.PyJWKClient(jwks_url)
+        # Restituisci sia il payload che il token originale
+        return {**payload, 'token': token.credentials}
