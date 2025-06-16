@@ -4,6 +4,12 @@ import os
 
 API_URL = os.getenv("API_URL", "http://localhost:8000/api")
 
+# Configurazione dell'URL API per i test - Scegliere l'URL API in base all'ambiente:
+# Locale:       "http://localhost:8000/api" # Ricordarsi di lanciare il server locale
+# Development:  "https://serverless-air-coach-git-develop-ai-struttore.vercel.app/api"
+# Produzione:   "https://www.air-coach.it/api"
+
+
 # Inserire qui un token JWT valido per i test e2e (può essere impostato via variabile d'ambiente)
 AUTH_TOKEN = os.getenv("TEST_AUTH_TOKEN", "")
 
