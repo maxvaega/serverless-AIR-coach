@@ -4,16 +4,13 @@ from .logging_config import logger
 import datetime
 from .env import *
 import json
-from .database import get_data #, ensure_indexes
-import boto3
-import threading
-
+from .database import get_data
 from .auth0 import get_user_metadata
 from .utils import format_user_metadata
 from .cache import get_cached_user_data, set_cached_user_data
-from typing import Optional
+from .s3_utils import fetch_docs_from_s3, create_prompt_file
+import threading
 
-s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 _docs_cache = {
     "content": None,
     "docs_meta": None,
@@ -21,46 +18,9 @@ _docs_cache = {
 }
 update_docs_lock = threading.Lock()  # Lock per sincronizzare gli aggiornamenti manuali
 
-def fetch_docs_from_s3():
-    """
-    Downloads Markdown files from the S3 bucket, combines their content and retrieves file metadata.
-    Restituisce un dizionario con:
-      - "combined_docs": contenuto combinato dei file (per system_prompt)
-      - "docs_meta": lista di dizionari con "title" e "last_modified" per ogni file
-    """
-    try:
-        objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix='docs/')
-        docs_content = []
-        docs_meta = []
-
-        # Itera sugli oggetti nel bucket
-        for obj in objects.get('Contents', []):
-            if obj['Key'].endswith('.md'):  # Filtra solo i file Markdown
-                response = s3_client.get_object(Bucket=BUCKET_NAME, Key=obj['Key'])
-                file_content = response['Body'].read().decode('utf-8')
-                docs_content.append(file_content)
-                # Estrae il titolo dal nome del file (l'ultima parte del key)
-                title = obj['Key'].split('/')[-1]
-                # Formatta la data/ora di ultima modifica
-                last_modified = obj.get('LastModified')
-                if isinstance(last_modified, datetime.datetime):
-                    last_modified = last_modified.strftime("%Y-%m-%d %H:%M:%S")
-                docs_meta.append({
-                    "title": title,
-                    "last_modified": last_modified
-                })
-
-        combined_docs = "\n\n".join(docs_content)
-        logger.info(f"Docs: Found and loaded {len(docs_content)} Markdown files from S3.")
-        return {"combined_docs": combined_docs, "docs_meta": docs_meta}
-
-    except Exception as e:
-        logger.error(f"Error while downloading files from S3: {e}")
-        return {"combined_docs": "", "docs_meta": []}
-
 def get_combined_docs():
     """
-    Returns the combined content of the Markdown files using the cache if available.
+    Restituisce il contenuto combinato dei file Markdown usando la cache se disponibile.
     Aggiorna anche i metadati se la cache è vuota.
     """
     global _docs_cache
@@ -121,9 +81,7 @@ llm = ChatGoogleGenerativeAI(
     temperature=1,
 )
 
-# ensure_indexes(DATABASE_NAME, COLLECTION_NAME)
-
-def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False):
+def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False, token: str = None):
     """
     Processes a user query and returns a response, optionally streaming the response.
 
@@ -144,14 +102,10 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
     if user_data:
         # Recupera i dati utente dalla cache
         user_info = get_cached_user_data(user_id)
-        # logger.info(f"user_info: {user_info}")
         if not user_info:
             # Recupera i metadata da Auth0
-            user_metadata = get_user_metadata(user_id)
-            # logger.info(f"user_metadata: {user_metadata}")
-            # Formatta i metadata
+            user_metadata = get_user_metadata(user_id, token=token)
             user_info = format_user_metadata(user_metadata)
-            # Salva nella cache
             set_cached_user_data(user_id, user_info)
         if user_info:
             messages.append(AIMessage(user_info))
@@ -181,8 +135,7 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
                     yield f"data: {data_json}\n\n"
                 except Exception as e:
                     logger.error(f"An error occurred while streaming the events: {e}")
-
-# Insert the data into the MongoDB collection
+            # Insert the data into the MongoDB collection
             response = "".join(response_chunks)
             try:
                 data = {
@@ -196,26 +149,3 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
             except Exception as e:
                 logger.error(f"An error occurred while inserting the data into the collection: {e}")
         return stream_response()
-
-def create_prompt_file(system_prompt: str):
-    """
-    Creates a prompt file with the given system prompt.
-
-    :param system_prompt: The system prompt to write to the file in AWS S3
-    """
-    s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
-    s3_key = "docs/system_prompt.md"
-
-    try:
-        file = s3_client.put_object(
-            Bucket=BUCKET_NAME,
-            Key=s3_key,
-            Body=system_prompt,
-            ContentType='text/markdown'
-        )
-        logger.info(f"System prompt salvato con successo in S3: s3://{BUCKET_NAME}/{s3_key}")
-        return file
-    except Exception as s3_error:
-        logger.error(f"Errore nel salvare su S3: {str(s3_error)}")
-        # Decidi se vuoi gestire l'errore S3 in modo specifico o lasciare che venga catturato
-        # dal try/except esterno
