@@ -11,6 +11,11 @@ from src.auth import VerifyToken
 
 auth = VerifyToken()
 
+from fastapi import FastAPI, Security
+from src.auth import VerifyToken
+
+auth = VerifyToken()
+
 app = FastAPI(
     title='Air-coach api', 
     version='0.2', 
