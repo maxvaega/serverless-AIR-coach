@@ -75,11 +75,10 @@ combined_docs = get_combined_docs()
 system_prompt = build_system_prompt(combined_docs)
 
 # Define LLM Model
-model = "gemini-2.5-flash"
+model = "gemini-2.0-flash"
 llm = ChatGoogleGenerativeAI(
     model=model,
-    temperature=0.7,
-    cache=True,
+    temperature=1,
 )
 
 def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False, token: str = None):
