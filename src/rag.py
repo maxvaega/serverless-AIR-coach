@@ -75,7 +75,7 @@ combined_docs = get_combined_docs()
 system_prompt = build_system_prompt(combined_docs)
 
 # Define LLM Model
-model = "gemini-2.5-flash"
+model = "gemini-2.5-flash-lite-preview-06-17"
 llm = ChatGoogleGenerativeAI(
     model=model,
     temperature=0.7,
