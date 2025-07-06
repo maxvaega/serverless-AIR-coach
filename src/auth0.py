@@ -1,7 +1,48 @@
 import requests
-from .env import AUTH0_DOMAIN
+from .env import AUTH0_DOMAIN, AUTH0_SECRET
 from .logging_config import logger
+from .cache import set_cached_auth0_token, get_cached_auth0_token
 from typing import Optional
+
+def get_auth0_token() -> Optional[str]:
+    """
+    Ottiene un token di accesso da Auth0 utilizzando le credenziali client.
+    
+    :return: Token di accesso come stringa oppure None in caso di errore.
+    """
+    # Verifica se il token è già presente nella cache
+    token = get_cached_auth0_token()
+    if token:
+        logger.info("Auth0: Token trovato in cache.")
+        return token
+
+    url = f"https://{AUTH0_DOMAIN}/oauth/token"
+    headers = {
+        'content-type': 'application/x-www-form-urlencoded'
+    }
+    payload = {
+        'grant_type': 'client_credentials',
+        'client_id': 'MRSjewKmL15bVGQoBWJlEFUTK57lykvj',
+        'client_secret': AUTH0_SECRET,
+        'audience': f"https://{AUTH0_DOMAIN}/api/v2/"
+    }
+
+    try:
+        response = requests.post(url, headers=headers, data=payload)
+        response.raise_for_status()
+        token_response = response.json()
+        access_token = token_response.get('access_token')
+        if access_token:
+            # Salva il token nella cache con TTL di 86400 secondi (24 ore)
+            set_cached_auth0_token(access_token)
+            logger.info(f"Auth0: Token ottenuto e salvato in cache: {access_token}")
+            return access_token
+        else:
+            logger.error("Auth0: Token non presente nella risposta.")
+            return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Auth0: Errore durante l'ottenimento del token: {e}")
+        return None
 
 def get_user_metadata(user_id: str, token: Optional[str] = None) -> dict:
     """
@@ -14,8 +55,10 @@ def get_user_metadata(user_id: str, token: Optional[str] = None) -> dict:
     if user_id == "string" or not user_id:
         logger.info(f"Auth0: user id fornito non valido: {user_id}")
         return {}
+
+    token = get_auth0_token()
     if not token:
-        logger.error("Auth0: Impossibile ottenere il token. Non è possibile recuperare i metadata utente.")
+        logger.error("Auth0: Impossibile ottenere il token Auth0. Non è possibile recuperare i metadata utente.")
         return {}
     url = f"https://{AUTH0_DOMAIN}/api/v2/users/{user_id}"
     headers = {
