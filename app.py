@@ -48,8 +48,8 @@ async def stream_endpoint(
 ):
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
-        logger.info(f"Token obtained: {token}")
-        stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True, token=token)
+        logger.info(f"Token received from frontend: {token}")
+        stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Exception occurred in /stream_query: {str(e)}")
