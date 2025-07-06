@@ -4,52 +4,23 @@ AIR Coach API is a FastAPI-based application designed for handling chatbot inter
 
 ## Features
 
-- **Query Endpoint**: Handle query requests and return responses.
-- **Streaming Query Endpoint**: Stream responses for long-running queries.
+- **Streaming Query Endpoint**: Handle query requests and stream responses
 - **Docs update Endpoint**: refreshes the docs in cache to updated the LLM context
-- **Test Endpoint**: Test the API with a simple request-response mechanism.
-- **CORS Middleware**: Allow cross-origin requests.
-- **LLM Model**: Gemini 2.0 Flash
 - **AWS S3 Context load**: dinamically loads context from .md files hosted in AWS S3
 - **User information**: reads data from auth0 to add to the LLM context window
+- **LLM Model**: Gemini 2.5 Flash
 
 ## Requirements
 
 - Python 3.7+
 - FastAPI
-- Uvicorn
-- Pydantic
+- Langchain
 - MongoDB
-- dotenv
+- others
 
 ## Environment Variables
 
-The following environment variables are required to configure the application:
-
-```
-# Google AI Configuration
-GOOGLE_API_KEY=<GOOGLE_API_KEY>
-
-# Langsmith Configuration
-LANGCHAIN_TRACING_V2=<LANGCHAIN_TRACING_V2>
-LANGCHAIN_ENDPOINT=<LANGCHAIN_ENDPOINT>
-LANGCHAIN_API_KEY=<LANGCHAIN_API_KEY>
-LANGCHAIN_PROJECT=<LANGCHAIN_PROJECT>
-
-# MongoDB Configuration
-MONGODB_URI=<MONGODB_URI>
-DATABASE_NAME=<DATABASE_NAME>
-COLLECTION_NAME=<COLLECTION_NAME>
-
-# AWS S3 configuration
-AWS_ACCESS_KEY_ID=AWS_ID
-AWS_SECRET_ACCESS_KEY=AWS_Secret
-BUCKET_NAME="bucket-name"
-
-# Auth0 configuration
-AUTH0_DOMAIN=AUTH0_DOMAIN
-AUTH0_SECRET=AUTH0_SECRET
-```
+To set environment variables, copy the file [.env.example](.env.example) and replace the keys
 
 # Local Test
 
@@ -77,3 +48,25 @@ python -m src.test
 Enter the query: 
 
 ```
+
+## To run automatic testing
+
+Per eseguire i test:
+
+1. Installa le dipendenze:
+
+    ```sh
+    pip install pytest httpx
+    ```
+
+2. Esporta un token JWT valido nella variabile d’ambiente TEST_AUTH_TOKEN:
+
+    ```sh
+    export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
+    ```
+
+3. Avvia il backend e lancia:
+
+    ```sh
+    pytest -v -rs tests/stream_query.py
+    ```
