@@ -1,3 +1,63 @@
+import threading
+
+_docs_cache = {
+    "content": None,
+    "docs_meta": None,
+    "timestamp": None 
+}
+update_docs_lock = threading.Lock()  # Lock per sincronizzare gli aggiornamenti manuali
+
+def get_combined_docs():
+    """
+    Restituisce il contenuto combinato dei file Markdown usando la cache se disponibile.
+    Aggiorna anche i metadati se la cache è vuota.
+    """
+    global _docs_cache
+    if (_docs_cache["content"] is None) or (_docs_cache["docs_meta"] is None):
+        logger.info("Docs: cache is empty. Fetching from S3...")
+        now = datetime.datetime.utcnow()
+        result = fetch_docs_from_s3()
+        _docs_cache["content"] = result["combined_docs"]
+        _docs_cache["docs_meta"] = result["docs_meta"]
+        _docs_cache["timestamp"] = now
+    else:
+        logger.info("Docs: found valid cache in use. no update triggered.")
+    return _docs_cache["content"]
+
+def build_system_prompt(combined_docs: str) -> str:
+    """
+    Costruisce e restituisce il system_prompt utilizzando il contenuto combinato dei documenti.
+    """
+    return f"""{combined_docs}"""
+
+def update_docs():
+    """
+    Forza l'aggiornamento della cache dei documenti da S3 e rigenera il system_prompt.
+    Aggiorna anche i metadati dei file e restituisce, nella response, il numero di documenti e per ognuno:
+    il titolo e la data di ultima modifica.
+    """
+    global _docs_cache, combined_docs, system_prompt
+    with update_docs_lock:
+        logger.info("Docs: manual update in progress...")
+        now = datetime.datetime.utcnow()
+        result = fetch_docs_from_s3()
+        _docs_cache["content"] = result["combined_docs"]
+        _docs_cache["docs_meta"] = result["docs_meta"]
+        _docs_cache["timestamp"] = now
+        combined_docs = _docs_cache["content"]
+        system_prompt = build_system_prompt(combined_docs)
+        logger.info("Docs Cache and system_prompt updated successfully.")
+
+        # Prepara i dati da ritornare: numero di documenti e metadati
+        docs_count = len(result["docs_meta"])
+        docs_details = result["docs_meta"]
+
+        return {
+            "message": "Document cache and system prompt updated successfully.",
+            "docs_count": docs_count,
+            "docs_details": docs_details,
+            "system_prompt": system_prompt
+        }
 import boto3
 import datetime
 from .env import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME

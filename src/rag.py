@@ -1,5 +1,6 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langgraph.prebuilt import create_react_agent
 from .logging_config import logger
 import datetime
 from .env import *
@@ -8,7 +9,8 @@ from .database import get_data
 from .auth0 import get_user_metadata
 from .utils import format_user_metadata
 from .cache import get_cached_user_data, set_cached_user_data
-from .s3_utils import fetch_docs_from_s3, create_prompt_file
+from .s3_utils import get_combined_docs, build_system_prompt, update_docs
+from .tools import AVAILABLE_TOOLS
 import threading
 
 _docs_cache = {
@@ -18,69 +20,30 @@ _docs_cache = {
 }
 update_docs_lock = threading.Lock()  # Lock per sincronizzare gli aggiornamenti manuali
 
-def get_combined_docs():
-    """
-    Restituisce il contenuto combinato dei file Markdown usando la cache se disponibile.
-    Aggiorna anche i metadati se la cache è vuota.
-    """
-    global _docs_cache
-    if (_docs_cache["content"] is None) or (_docs_cache["docs_meta"] is None):
-        logger.info("Docs: cache is empty. Fetching from S3...")
-        now = datetime.datetime.utcnow()
-        result = fetch_docs_from_s3()
-        _docs_cache["content"] = result["combined_docs"]
-        _docs_cache["docs_meta"] = result["docs_meta"]
-        _docs_cache["timestamp"] = now
-    else:
-        logger.info("Docs: found valid cache in use. no update triggered.")
-    return _docs_cache["content"]
-
-def build_system_prompt(combined_docs: str) -> str:
-    """
-    Costruisce e restituisce il system_prompt utilizzando il contenuto combinato dei documenti.
-    """
-    return f"""{combined_docs}"""
-
-def update_docs():
-    """
-    Forza l'aggiornamento della cache dei documenti da S3 e rigenera il system_prompt.
-    Aggiorna anche i metadati dei file e restituisce, nella response, il numero di documenti e per ognuno:
-    il titolo e la data di ultima modifica.
-    """
-    global _docs_cache, combined_docs, system_prompt
-    with update_docs_lock:
-        logger.info("Docs: manual update in progress...")
-        now = datetime.datetime.utcnow()
-        result = fetch_docs_from_s3()
-        _docs_cache["content"] = result["combined_docs"]
-        _docs_cache["docs_meta"] = result["docs_meta"]
-        _docs_cache["timestamp"] = now
-        combined_docs = _docs_cache["content"]
-        system_prompt = build_system_prompt(combined_docs)
-        logger.info("Docs Cache and system_prompt updated successfully.")
-
-        # Prepara i dati da ritornare: numero di documenti e metadati
-        docs_count = len(result["docs_meta"])
-        docs_details = result["docs_meta"]
-
-        return {
-            "message": "Document cache and system prompt updated successfully.",
-            "docs_count": docs_count,
-            "docs_details": docs_details,
-            "system_prompt": system_prompt
-        }
-
 # Load Documents from S3 on load to build prompt
 combined_docs = get_combined_docs()
 system_prompt = build_system_prompt(combined_docs)
 
 # Define LLM Model
-model = "models/gemini-2.5-flash" #"gemini-2.5-flash"
+model = "gemini-2.5-flash-lite-preview-06-17" # test only, rimettere "gemini-2.5-flash"
 llm = ChatGoogleGenerativeAI(
     model=model,
     temperature=0.7,
     cache=True,
 )
+
+tool_name = "domanda_quiz_teoria"
+tools = []
+for tool_name, tool in AVAILABLE_TOOLS.items():
+    tools.append(tool)
+
+agent_graph = create_react_agent(
+        model=llm, 
+        tools=tools,
+        prompt=system_prompt
+)
+
+logger.info(f"Agent Graph created with model: {model} and tools: {', '.join([tool.name for tool in tools])}")
 
 def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False, token: str = None):
     """
@@ -98,7 +61,7 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
     :param stream: Optional; If True, streams the response asynchronously.
     :return: The response to the query, either as a single result or a generator for streaming.
     """
-    messages = [SystemMessage(system_prompt)]
+    messages = []
     
     if user_data:
         # Recupera i dati utente dalla cache
@@ -109,25 +72,32 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
             user_info = format_user_metadata(user_metadata)
             set_cached_user_data(user_id, user_info)
         if user_info:
-            messages.append(AIMessage(user_info))
+            messages.append({
+                "role": "system",
+                "content": user_info
+            })
+            logger.info(f"User info for {user_id} added to messages: \n")
     
     history_limit = 10
     if chat_history:
         history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
         for msg in history:
-            messages.append(HumanMessage(msg["human"]))
-            messages.append(AIMessage(msg["system"]))
+            messages.append({"role": "user", "content": msg["human"]})
+            messages.append({"role": "assistant", "content": msg["system"]})
+        logger.info(f"Chat history for user {user_id} loaded with {len(history)} messages.")
 
-    messages.append(HumanMessage(query))
+    messages.append({"role": "user", "content": query})
 
+    logger.info(messages)
+    
     if not stream:
-        return llm.invoke(messages)
+        return agent_graph.invoke(messages)
     else:
         from .database import insert_data
         response_chunks = []
 
         async def stream_response():
-            for event in llm.stream(input=messages):
+            for event in agent_graph.stream(messages):
                 try:
                     content = event.content
                     response_chunks.append(content)
