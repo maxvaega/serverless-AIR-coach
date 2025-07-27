@@ -4,7 +4,7 @@ from .logging_config import logger
 import datetime
 from .env import *
 import json
-from .database import get_data
+from .database import get_data, insert_data
 from .auth0 import get_user_metadata
 from .utils import format_user_metadata
 from .cache import get_cached_user_data, set_cached_user_data
@@ -75,7 +75,8 @@ combined_docs = get_combined_docs()
 system_prompt = build_system_prompt(combined_docs)
 
 # Define LLM Model
-model = "models/gemini-2.5-flash" #"gemini-2.5-flash"
+model = FORCED_MODEL
+logger.info(f"Selected LLM model: {model}")
 llm = ChatGoogleGenerativeAI(
     model=model,
     temperature=0.7,
@@ -99,31 +100,38 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
     :return: The response to the query, either as a single result or a generator for streaming.
     """
     messages = [SystemMessage(system_prompt)]
-    
-    if user_data:
-        # Recupera i dati utente dalla cache
-        user_info = get_cached_user_data(user_id)
-        if not user_info:
-            # Recupera i metadata da Auth0
-            user_metadata = get_user_metadata(user_id, token=token)
-            user_info = format_user_metadata(user_metadata)
-            set_cached_user_data(user_id, user_info)
-        if user_info:
-            messages.append(AIMessage(user_info))
+    try:
+        if user_data:
+            # Recupera i dati utente dalla cache
+            user_info = get_cached_user_data(user_id)
+            if not user_info:
+                # Recupera i metadata da Auth0
+                user_metadata = get_user_metadata(user_id, token=token)
+                user_info = format_user_metadata(user_metadata)
+                set_cached_user_data(user_id, user_info)
+            if user_info:
+                messages.append(AIMessage(user_info))
+    except Exception as e:
+        logger.error(f"An error occurred while retrieving user data: {e}")
+        return f"data: {{'error': 'An error occurred while retrieving user data: {str(e)}'}}\n\n"
     
     history_limit = 10
-    if chat_history:
-        history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
-        for msg in history:
-            messages.append(HumanMessage(msg["human"]))
-            messages.append(AIMessage(msg["system"]))
 
-    messages.append(HumanMessage(query))
+    try:
+        if chat_history:
+            history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
+            for msg in history:
+                messages.append(HumanMessage(msg["human"]))
+                messages.append(AIMessage(msg["system"]))
+        messages.append(HumanMessage(query))
+
+    except Exception as e:
+        logger.error(f"An error occurred while retrieving chat history: {e}")
+        return f"data: {{'error': 'An error occurred while retrieving chat history: {str(e)}'}}\n\n"
 
     if not stream:
         return llm.invoke(messages)
     else:
-        from .database import insert_data
         response_chunks = []
 
         async def stream_response():
@@ -134,19 +142,27 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
                     data_dict = {"data": content}
                     data_json = json.dumps(data_dict)
                     yield f"data: {data_json}\n\n"
+                    logger.info(f"event= {event}")
                 except Exception as e:
-                    logger.error(f"An error occurred while streaming the events: {e}")
+                    logger.error(f"An error occurred while streaming the response: {e}")
+                    yield f"data: {{'error': 'An error occurred while streaming the response: {str(e)}'}}\n\n"
             # Insert the data into the MongoDB collection
+            
             response = "".join(response_chunks)
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logger.info(f"Response completed at {timestamp}: {response}")
+
             try:
+                
                 data = {
                     "human": query,
                     "system": response,
                     "userId": user_id,
-                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "timestamp": timestamp
                 }
                 insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                logger.info(f"Data inserted into the collection: {COLLECTION_NAME}")
+                logger.info(f"Response inserted into the collection: {COLLECTION_NAME} ")
             except Exception as e:
                 logger.error(f"An error occurred while inserting the data into the collection: {e}")
+                yield f"data: {{'error': 'An error occurred while inserting the data into the collection: {str(e)}'}}\n\n"
         return stream_response()
