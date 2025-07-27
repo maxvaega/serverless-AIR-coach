@@ -51,22 +51,4 @@ Enter the query:
 
 ## To run automatic testing
 
-Per eseguire i test:
-
-1. Installa le dipendenze:
-
-    ```sh
-    pip install pytest httpx
-    ```
-
-2. Esporta un token JWT valido nella variabile d’ambiente TEST_AUTH_TOKEN:
-
-    ```sh
-    export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
-    ```
-
-3. Avvia il backend e lancia:
-
-    ```sh
-    pytest -v -rs tests/stream_query.py
-    ```
+see [docs/test.md](docs/test.md) for setup and usage with pytest.

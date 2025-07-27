@@ -2,10 +2,10 @@ import pytest
 import httpx
 import os
 
-API_URL = os.getenv("API_URL", "http://localhost:8000/api")
+API_URL = os.getenv("API_URL", "http://localhost:8080/api")
 
 # Configurazione dell'URL API per i test - Scegliere l'URL API in base all'ambiente:
-# Locale:       "http://localhost:8000/api" # Ricordarsi di lanciare il server locale
+# Locale:       "http://localhost:8080/api" # Ricordarsi di lanciare il server locale
 # Development:  "https://serverless-air-coach-git-develop-ai-struttore.vercel.app/api"
 # Produzione:   "https://www.air-coach.it/api"
 

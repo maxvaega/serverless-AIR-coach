@@ -2,7 +2,7 @@ import pytest
 import httpx
 import os
 
-API_URL = os.getenv("API_URL", "http://localhost:8000/api")
+API_URL = os.getenv("API_URL", "http://localhost:8080/api")
 
 # Inserire qui un token JWT valido per i test e2e (può essere impostato via variabile d'ambiente)
 AUTH_TOKEN = os.getenv("TEST_AUTH_TOKEN", "")
