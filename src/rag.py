@@ -135,17 +135,17 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
         response_chunks = []
 
         async def stream_response():
-            for event in llm.stream(input=messages):
-                try:
+            try:
+                for event in llm.stream(input=messages):
                     content = event.content
                     response_chunks.append(content)
                     data_dict = {"data": content}
                     data_json = json.dumps(data_dict)
                     yield f"data: {data_json}\n\n"
                     logger.info(f"event= {event}")
-                except Exception as e:
-                    logger.error(f"An error occurred while streaming the response: {e}")
-                    yield f"data: {{'error': 'An error occurred while streaming the response: {str(e)}'}}\n\n"
+            except Exception as e:
+                logger.error(f"An error occurred while streaming the response: {e}")
+                yield f"data: {{'error': 'An error occurred while streaming the response: {str(e)}'}}\n\n"
             # Insert the data into the MongoDB collection
             
             response = "".join(response_chunks)
