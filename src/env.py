@@ -31,6 +31,8 @@ auth0_api_audience = os.getenv("AUTH0_API_AUDIENCE", "your-auth0-api-audience")
 auth0_issuer = os.getenv("AUTH0_ISSUER", "https://your-auth0-domain/")
 auth0_algorithms = os.getenv("AUTH0_ALGORITHMS", "RS256").split(",")
 
+FORCED_MODEL = os.getenv("FORCED_MODEL") if os.getenv("FORCED_MODEL") else "models/gemini-2.5-flash"
+
 from pydantic import field_validator
 
 class Settings(BaseSettings):

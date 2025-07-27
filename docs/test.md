@@ -112,7 +112,13 @@ Per eseguire i test:
     export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
     ```
 
-3. Avvia il backend e lancia:
+3. (facoltativo) Seleziona l'url del server che vuoi testare - in caso contrario si connetterà automaticamente a localhost:8080/api
+
+    ```sh
+    export API_URL="http://www.testserver.com/api"
+    ```
+
+4. Avvia il backend e lancia:
 
     ```sh
     pytest -v -rs tests/stream_query.py
