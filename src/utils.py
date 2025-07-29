@@ -52,8 +52,8 @@ def format_user_metadata(user_metadata: Dict) -> str:
             "NO_PARACADUTISMO": "non ha mai fatto paracadutismo",
             "ALLIEVO": "allievo senza licenza",
             "LICENZIATO": "qualifica: Paracadutista licenziato",
-            "CS-DL": "qualifica: possiede la licenza di paracadutismo e la qualifica Direttore di lancio",
-            "CS-IP": "qualifica: possiede la licenza di paracadutismo, la qualifica Direttore di lancio e Istruttore"
+            "DL": "qualifica: possiede la licenza di paracadutismo e la qualifica Direttore di lancio",
+            "IP": "qualifica: possiede la licenza di paracadutismo, la qualifica Direttore di lancio e Istruttore"
             }
             qualifica_formattata = qualifications_mapping.get(qualifications, "")
 
