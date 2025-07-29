@@ -10,90 +10,99 @@ def format_user_metadata(user_metadata: Dict) -> str:
     :param user_metadata: Dizionario contenente i metadata dell'utente.
     :return: Stringa formattata con le informazioni dell'utente.
     """
-    if not user_metadata:
+    try:
+        if not user_metadata:
+            date = datetime.datetime.now().strftime("%Y-%m-%d")
+            if date:
+                formatted_data = f"\nOggi è il {date}\n"
+
+            logger.info("Nessun metadata utente trovato.")
+            return formatted_data
+        
+        formatted_data = "I dati che l’utente ti ha fornito su di sè sono:\n"
+        
+        # Date of Birth
+        date_of_birth = user_metadata.get("date_of_birth")
+        if date_of_birth:
+            formatted_data += f"Data di Nascita: {date_of_birth}\n"
+        
+        # Jumps
+        jumps = user_metadata.get("jumps")
+        if jumps:
+            jumps_mapping = {
+                "0_10": "0 - 10",
+                "11_50": "11 - 50",
+                "51_150": "51 - 150",
+                "151_300": "151 - 300",
+                "301_1000": "301 - 1000",
+                "1000+": "1000+"
+            }
+            if jumps in jumps_mapping:
+                formatted_data += f"Numero di salti: {jumps_mapping[jumps]}\n"
+            else:
+                logger.warning(f"User metadata: Numero di salti non riconosciuto: {jumps}")
+        
+        # Preferred Dropzone
+        preferred_dropzone = user_metadata.get("preferred_dropzone")
+        if preferred_dropzone:
+            formatted_data += f"Dropzone preferita: {preferred_dropzone}\n"
+        
+        # Qualifications
+        qualifications = user_metadata.get("qualifications")
+        if qualifications:
+                qualifications_mapping = {
+                "NO_PARACADUTISMO": "non ha mai fatto paracadutismo",
+                "ALLIEVO": "allievo senza licenza",
+                "LICENZIATO": "qualifica: Paracadutista licenziato",
+                "DL": "qualifica: possiede la licenza di paracadutismo e la qualifica Direttore di lancio",
+                "IP": "qualifica: possiede la qualifica da Istruttore di paracadutismo",
+                }
+                qualifica_formattata = qualifications_mapping.get(qualifications, "")
+
+                if qualifica_formattata:
+                    formatted_data += f"{qualifica_formattata}\n"
+                else:
+                    logger.warning(f"User metadata: Qualifica non riconosciuta: {qualifications}")
+
+        # Name
+        name = user_metadata.get("name")
+        if name:
+            formatted_data += f"Nome: {name}\n"
+        
+        # Surname
+        surname = user_metadata.get("surname")
+        if surname:
+            formatted_data += f"Cognome: {surname}\n"
+        
+        # Sex
+        sex = user_metadata.get("sex")
+        if sex:
+            sex_mapping = {
+                "MASCHIO": "Maschio",
+                "FEMMINA": "Femmina",
+                "SCONOSCIUTO": "Preferisce non dirlo",
+            }
+            sesso_formattato = sex_mapping.get(sex, "")
+
+            if sesso_formattato:
+                formatted_data += f"Sesso: {sesso_formattato}\n"
+            else:
+                logger.warning(f"User metadata: Sesso non riconosciuto: {sex}")
+        
+
         date = datetime.datetime.now().strftime("%Y-%m-%d")
         if date:
-            formatted_data = f"\nOggi è il {date}\n"
-    
+            formatted_data += f"\nOggi è il {date}\n"
+
+        name = user_metadata.get("name")
+        surname = user_metadata.get("surname")
+        logger.info(f"New user metadata in cache: {name} {surname}\n{formatted_data}")
+
         return formatted_data
     
-    formatted_data = "I dati che l’utente ti ha fornito su di sè sono:\n"
-    
-    # Date of Birth
-    date_of_birth = user_metadata.get("date_of_birth")
-    if date_of_birth:
-        formatted_data += f"Data di Nascita: {date_of_birth}\n"
-    
-    # Jumps
-    jumps = user_metadata.get("jumps")
-    if jumps:
-        jumps_mapping = {
-            "0_10": "0 - 10",
-            "11_50": "11 - 50",
-            "51_150": "51 - 150",
-            "151_300": "151 - 300",
-            "301_1000": "301 - 1000",
-            "1000+": "1000+"
-        }
-        if jumps in jumps_mapping:
-            formatted_data += f"Numero di salti: {jumps_mapping[jumps]}\n"
-        else:
-            logger.warning(f"User metadata: Numero di salti non riconosciuto: {jumps}")
-    
-    # Preferred Dropzone
-    preferred_dropzone = user_metadata.get("preferred_dropzone")
-    if preferred_dropzone:
-        formatted_data += f"Dropzone preferita: {preferred_dropzone}\n"
-    
-    # Qualifications
-    qualifications = user_metadata.get("qualifications")
-    if qualifications:
-            qualifications_mapping = {
-            "NO_PARACADUTISMO": "non ha mai fatto paracadutismo",
-            "ALLIEVO": "allievo senza licenza",
-            "LICENZIATO": "qualifica: Paracadutista licenziato",
-            "DL": "qualifica: possiede la licenza di paracadutismo e la qualifica Direttore di lancio",
-            "IP": "qualifica: possiede la licenza di paracadutismo, la qualifica Direttore di lancio e Istruttore"
-            }
-            qualifica_formattata = qualifications_mapping.get(qualifications, "")
-
-            if qualifica_formattata:
-                formatted_data += f"{qualifica_formattata}\n"
-            else:
-                logger.warning(f"User metadata: Qualifica non riconosciuta: {qualifications}")
-
-    # Name
-    name = user_metadata.get("name")
-    if name:
-        formatted_data += f"Nome: {name}\n"
-    
-    # Surname
-    surname = user_metadata.get("surname")
-    if surname:
-        formatted_data += f"Cognome: {surname}\n"
-    
-    # Sex
-    sex = user_metadata.get("sex")
-    if sex:
-        sex_mapping = {
-            "MASCHIO": "Maschio",
-            "FEMMINA": "Femmina",
-            "SCONOSCIUTO": "Preferisce non dirlo",
-        }
-        sesso_formattato = sex_mapping.get(sex, "")
-
-        if sesso_formattato:
-            formatted_data += f"Sesso: {sesso_formattato}\n"
-        else:
-            logger.warning(f"User metadata: Sesso non riconosciuto: {sex}")
-    
-
-    date = datetime.datetime.now().strftime("%Y-%m-%d")
-    if date:
-        formatted_data += f"\nOggi è il {date}\n"
-    
-    logger.info(f"Formatted user metadata: {formatted_data}")
-    return formatted_data
+    except Exception as e:
+        logger.error(f"An error occurred while formatting user metadata: {e}")
+        return
 
 # controlli per autenticazione user_id
 def validate_user_id(user_id):

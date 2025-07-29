@@ -112,7 +112,7 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
             if user_info:
                 messages.append(AIMessage(user_info))
     except Exception as e:
-        logger.error(f"An error occurred while retrieving user data: {e}")
+        logger.error(f"An error occurred while retrieving user data for user ID {user_id}: {e}")
         return f"data: {{'error': 'An error occurred while retrieving user data: {str(e)}'}}\n\n"
     
     history_limit = 10
