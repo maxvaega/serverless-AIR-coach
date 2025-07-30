@@ -1,9 +1,10 @@
 import boto3
 import datetime
-from .env import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME
-from .logging_config import logger
+from app.config import settings
+import logging
+logger = logging.getLogger("uvicorn")
 
-s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+s3_client = boto3.client('s3', aws_access_key_id=settings.AWS_ACCESS_KEY_ID, aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY)
 
 def fetch_docs_from_s3():
     """
@@ -13,13 +14,13 @@ def fetch_docs_from_s3():
       - "docs_meta": lista di dizionari con "title" e "last_modified" per ogni file
     """
     try:
-        objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix='docs/')
+        objects = s3_client.list_objects_v2(Bucket=settings.BUCKET_NAME, Prefix='docs/')
         docs_content = []
         docs_meta = []
 
         for obj in objects.get('Contents', []):
             if obj['Key'].endswith('.md'):
-                response = s3_client.get_object(Bucket=BUCKET_NAME, Key=obj['Key'])
+                response = s3_client.get_object(Bucket=settings.BUCKET_NAME, Key=obj['Key'])
                 file_content = response['Body'].read().decode('utf-8')
                 docs_content.append(file_content)
                 title = obj['Key'].split('/')[-1]
@@ -44,12 +45,12 @@ def create_prompt_file(system_prompt: str):
     s3_key = "docs/system_prompt.md"
     try:
         file = s3_client.put_object(
-            Bucket=BUCKET_NAME,
+            Bucket=settings.BUCKET_NAME,
             Key=s3_key,
             Body=system_prompt,
             ContentType='text/markdown'
         )
-        logger.info(f"System prompt salvato con successo in S3: s3://{BUCKET_NAME}/{s3_key}")
+        logger.info(f"System prompt salvato con successo in S3: s3://{settings.BUCKET_NAME}/{s3_key}")
         return file
     except Exception as s3_error:
         logger.error(f"Errore nel salvare su S3: {str(s3_error)}")

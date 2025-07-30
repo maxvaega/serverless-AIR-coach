@@ -1,18 +1,20 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Security
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from src.logging_config import logger
-from src.models import MessageRequest
-from src.rag import ask, update_docs
-from src.s3_utils import create_prompt_file
-from src.env import is_production
+from app.models import MessageRequest
+from app.rag import ask, update_docs
+from app.s3_utils import create_prompt_file
+from app.env import is_production
 import uvicorn
-from src.auth import VerifyToken
+from app.auth import VerifyToken
+import logging
+
+logger = logging.getLogger("uvicorn")
 
 auth = VerifyToken()
 
 from fastapi import FastAPI, Security
-from src.auth import VerifyToken
+from app.auth import VerifyToken
 
 auth = VerifyToken()
 
@@ -36,6 +38,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@api_router.get("/test")
+async def test():
+    """
+    Test endpoint to verify the API is running.
+    """
+    logger.info("Test endpoint called")
+    return {"message": "API is running successfully!"}
+
 
 #############################################
 # FastAPI Endpoints

@@ -1,8 +1,9 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 import datetime
-from .env import *
+from app.config import settings
 import json
 from .database import get_data, insert_data
 from .auth0 import get_user_metadata
@@ -75,7 +76,7 @@ combined_docs = get_combined_docs()
 system_prompt = build_system_prompt(combined_docs)
 
 # Define LLM Model
-model = FORCED_MODEL
+model = settings.FORCED_MODEL
 logger.info(f"Selected LLM model: {model}")
 llm = ChatGoogleGenerativeAI(
     model=model,
@@ -119,7 +120,7 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
 
     try:
         if chat_history:
-            history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
+            history = get_data(settings.DATABASE_NAME, settings.COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
             for msg in history:
                 messages.append(HumanMessage(msg["human"]))
                 messages.append(AIMessage(msg["system"]))
@@ -160,8 +161,8 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
                     "userId": user_id,
                     "timestamp": timestamp
                 }
-                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                logger.info(f"Response inserted into the collection: {COLLECTION_NAME} ")
+                insert_data(settings.DATABASE_NAME, settings.COLLECTION_NAME, data)
+                logger.info(f"Response inserted into the collection: {settings.COLLECTION_NAME} ")
             except Exception as e:
                 logger.error(f"An error occurred while inserting the data into the collection: {e}")
                 yield f"data: {{'error': 'An error occurred while inserting the data into the collection: {str(e)}'}}\n\n"

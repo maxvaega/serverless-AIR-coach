@@ -1,6 +1,7 @@
 import requests
-from .env import AUTH0_DOMAIN, AUTH0_SECRET
-from .logging_config import logger
+from app.config import settings
+import logging
+logger = logging.getLogger("uvicorn")
 from .cache import set_cached_auth0_token, get_cached_auth0_token
 from typing import Optional
 
@@ -16,15 +17,15 @@ def get_auth0_token() -> Optional[str]:
         logger.info("Auth0: Token trovato in cache.")
         return token
 
-    url = f"https://{AUTH0_DOMAIN}/oauth/token"
+    url = f"https://{settings.AUTH0_DOMAIN}/oauth/token"
     headers = {
         'content-type': 'application/x-www-form-urlencoded'
     }
     payload = {
         'grant_type': 'client_credentials',
         'client_id': 'MRSjewKmL15bVGQoBWJlEFUTK57lykvj',
-        'client_secret': AUTH0_SECRET,
-        'audience': f"https://{AUTH0_DOMAIN}/api/v2/"
+        'client_secret': settings.AUTH0_SECRET,
+        'audience': f"https://{settings.AUTH0_DOMAIN}/api/v2/"
     }
 
     try:
@@ -60,7 +61,7 @@ def get_user_metadata(user_id: str, token: Optional[str] = None) -> dict:
     if not token:
         logger.error("Auth0: Impossibile ottenere il token Auth0. Non è possibile recuperare i metadata utente.")
         return {}
-    url = f"https://{AUTH0_DOMAIN}/api/v2/users/{user_id}"
+    url = f"https://{settings.AUTH0_DOMAIN}/api/v2/users/{user_id}"
     headers = {
         'Accept': 'application/json',
         'Authorization': f"Bearer {token}"

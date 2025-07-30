@@ -42,7 +42,7 @@ INFO:     Started reloader process [31094] using StatReload
 ## Test Single Query
 
 ```sh
-python -m src.test
+python -m app.test
 
 # Example Output
 Enter the query: 

@@ -1,14 +1,15 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from .env import URI
-from .logging_config import logger
+from app.config import settings
+import logging
+logger = logging.getLogger("uvicorn")
 
-if not URI:
+if not settings.URI:
     raise ValueError("No MongoDB URI found. Please set the MONGODB_URI environment variable.")
 
 try:
     # Create a new client and connect to the server
-    client = MongoClient(URI, server_api=ServerApi('1'))
+    client = MongoClient(settings.URI, server_api=ServerApi('1'))
     # logger.info("Connected to MongoDB successfully.") # Antonio sistemalo
 except Exception as e:
     print(f"An error occurred while connecting to MongoDB: {e}")
