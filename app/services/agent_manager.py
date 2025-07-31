@@ -14,7 +14,7 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
+# from langchain_openai import ChatOpenAI
 
 from app.config import settings
 from app.tools import AVAILABLE_TOOLS
@@ -110,20 +110,12 @@ class AgentManager:
             raise ValueError(f"Agent with ID '{agent_id}' already exists in memory.")
         
         # If agent doesn't exist, create a new one
-        model_name = "gemini-2.5-flash"
-        # Select the appropriate model
-        if "gemini" in model_name.lower():
-            model = ChatGoogleGenerativeAI(
-                model=model_name,
-                temperature=0,
-                api_key=settings.GOOGLE_API_KEY
-            )
-        else:
-            model = ChatOpenAI(
-                model=model_name,
-                temperature=0,
-                api_key=settings.OPENAI_API_KEY
-            )
+        model_name = settings.FORCED_MODEL
+        model = ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=0,
+            api_key=settings.GOOGLE_API_KEY
+        )
         
         # Get the requested tools
         tool_names= ["quiz_database_lookup", "database_lookup"]
