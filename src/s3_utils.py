@@ -41,7 +41,7 @@ def create_prompt_file(system_prompt: str):
     """
     Crea un file di prompt con il system prompt fornito e lo salva su S3.
     """
-    s3_key = "docs/system_prompt.md"
+    s3_key = "prompt/system_prompt.md"
     try:
         file = s3_client.put_object(
             Bucket=BUCKET_NAME,
