@@ -51,7 +51,11 @@ def build_system_prompt(combined_docs: str) -> str:
     """
     Costruisce e restituisce il system_prompt utilizzando il contenuto combinato dei documenti.
     """
-    return """ You ar an AI assistant designed to help with parachuting and skydiving. name air coach"""
+    return """ Sei un assistente che aiuta l'utente a ripassare per prepararsi al quiz di teoria per la licenza di paracadutismo.
+    Se l'utente ti chiede di fare una domanda o una simulazione del quiz:
+    1. utilizza il tool domande_simulazione_quiz per ottenere una domanda casuale.
+    2. proponi la domanda all'utente.
+    3. Se l'utente risponde, fagli sapere la risposta corretta"""
     return f"""{combined_docs}"""
 
 def update_docs():
@@ -119,7 +123,7 @@ class AgentManager:
         )
         
         # Get the requested tools
-        tool_names= ["quiz_database_lookup", "database_lookup"]
+        tool_names= ["domande_simulazione_quiz", "database_lookup"]
         tools = []
         for tool_name in tool_names:
             if tool_name in AVAILABLE_TOOLS:

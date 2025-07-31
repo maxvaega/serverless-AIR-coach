@@ -14,7 +14,7 @@ def fetch_docs_from_s3():
       - "docs_meta": lista di dizionari con "title" e "last_modified" per ogni file
     """
     try:
-        objects = s3_client.list_objects_v2(Bucket=settings.BUCKET_NAME, Prefix='docs/')
+        objects = s3_client.list_objects_v2(Bucket=settings.BUCKET_NAME, Prefix='test/')
         docs_content = []
         docs_meta = []
 

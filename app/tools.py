@@ -35,8 +35,8 @@ def database_lookup(entity: str) -> str:
 
 # Database Lookup Tool
 @tool
-def quiz_database_lookup(entity: str, categoria: str = None) -> str:
-    """Restituisce domande sul quiz."""
+def domande_simulazione_quiz(entity: str, categoria: str = None) -> str:
+    """Restituisce domande e risposte da utilizzare per fare simulazioni del quiz di teoria"""
     logger.info(f"Database lookup for entity: {entity} in categoria: {categoria}")
    
     try:
@@ -58,11 +58,11 @@ def quiz_database_lookup(entity: str, categoria: str = None) -> str:
 
 # Dictionary of available tools
 AVAILABLE_TOOLS = {
-    "quiz_database_lookup": quiz_database_lookup,
+    "domande_simulazione_quiz": domande_simulazione_quiz,
     "database_lookup": database_lookup
 }
 
 if __name__ == "__main__":
     quiz_entity = "domanda"
     categoria = "generale"
-    print(quiz_database_lookup(quiz_entity, categoria))
+    print(domande_simulazione_quiz(quiz_entity, categoria))
