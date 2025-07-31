@@ -4,17 +4,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.models import MessageRequest
 from app.rag import ask, update_docs
 from app.s3_utils import create_prompt_file
-from app.env import is_production
 import uvicorn
 from app.auth import VerifyToken
 import logging
-
-logger = logging.getLogger("uvicorn")
-
-auth = VerifyToken()
+from app.services.agent_manager import AgentManager
+import uuid
+from app.config import settings
 
 from fastapi import FastAPI, Security
 from app.auth import VerifyToken
+
+logger = logging.getLogger("uvicorn")
 
 auth = VerifyToken()
 
@@ -22,7 +22,7 @@ app = FastAPI(
     title='Air-coach api', 
     version='0.2', 
     description='API for AIR Coach application<br />now with Gemini 2.0',
-    docs_url=None if is_production else "/api/docs",  # Disabilita /docs in produzione
+    docs_url=None if settings.is_production else "/api/docs",  # Disabilita /docs in produzione
     )
 
 api_router = APIRouter(prefix="/api")
@@ -39,6 +39,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():    
+    try:
+        AgentManager.load_agents_from_db()
+    except Exception as e:
+        logger.error(f"Error during startup: {str(e)}")
+
 @api_router.get("/test")
 async def test():
     """
@@ -51,6 +58,30 @@ async def test():
 #############################################
 # FastAPI Endpoints
 #############################################
+
+@api_router.post("/stream_agent")
+async def stream_endpoint(
+    request: MessageRequest
+):
+    try:
+        # Ensure thread_id is not None
+        thread_id = str(uuid.uuid4())
+        logger.info(f"Request received: \ntoken= \nmessage= {request.message}\nuserid= {request.userid}\nthread_id= {thread_id}")
+        # Process the chat request through the agent manager
+        result = await AgentManager.process_chat(
+            query = request.message,
+            agent_id = "air-coach",
+            thread_id=thread_id,
+            include_history=True,
+            user_id=request.userid
+        )
+        
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.info(f"Error processing chat: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error processing chat")
 
 @api_router.post("/stream_query")
 async def stream_endpoint(

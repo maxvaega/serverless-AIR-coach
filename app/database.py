@@ -4,12 +4,12 @@ from app.config import settings
 import logging
 logger = logging.getLogger("uvicorn")
 
-if not settings.URI:
+if not settings.MONGODB_URI:
     raise ValueError("No MongoDB URI found. Please set the MONGODB_URI environment variable.")
 
 try:
     # Create a new client and connect to the server
-    client = MongoClient(settings.URI, server_api=ServerApi('1'))
+    client = MongoClient(settings.MONGODB_URI, server_api=ServerApi('1'))
     # logger.info("Connected to MongoDB successfully.") # Antonio sistemalo
 except Exception as e:
     print(f"An error occurred while connecting to MongoDB: {e}")
@@ -120,5 +120,3 @@ def ensure_indexes(database_name, collection_name):
         logger.info(f"MongoDB: Index '{index_name}' created successfully on collection {collection_name}")
     except Exception as e:
         logger.error(f"MongoDB: Error creating index on collection {collection_name}: {e}")
-
-

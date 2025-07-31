@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY : str = os.getenv('GOOGLE_API_KEY')
 
     # Setup MongoDB environment
-    URI : str = os.getenv("MONGODB_URI")
+    MONGODB_URI : str = os.getenv("MONGODB_URI")
     DATABASE_NAME : str = os.getenv("DATABASE_NAME")
     COLLECTION_NAME : str = os.getenv("COLLECTION_NAME")
 
