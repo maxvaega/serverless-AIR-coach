@@ -21,7 +21,7 @@ from app.tools import AVAILABLE_TOOLS
 import threading
 from app.s3_utils import fetch_docs_from_s3, create_prompt_file
 
-logger = logging.getLogger("uvucorn")
+logger = logging.getLogger("uvicorn")
 
 _docs_cache = {
     "content": None,
@@ -111,6 +111,7 @@ class AgentManager:
         
         # If agent doesn't exist, create a new one
         model_name = settings.FORCED_MODEL
+        logger.info(f"Creating agent with ID: {agent_id}, name: {name}, model: {model_name}")
         model = ChatGoogleGenerativeAI(
             model=model_name,
             temperature=0,
