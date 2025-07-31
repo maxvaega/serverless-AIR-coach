@@ -6,6 +6,7 @@ from src.models import MessageRequest
 from src.rag import ask, update_docs
 from src.s3_utils import create_prompt_file
 from src.env import is_production
+import json
 import uvicorn
 from src.auth import VerifyToken
 
@@ -65,10 +66,9 @@ async def update_docs_endpoint():
     - The total number of documents
     - Details for each document (title and last modified date)
     """
-    import json
     try:
         update_result = update_docs()
-        system_prompt = json.loads(json.dumps(update_result["system_prompt"]).replace('\n', '\\n'))
+        system_prompt = update_result["system_prompt"]
         
         try:
             file = create_prompt_file(system_prompt)
