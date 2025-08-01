@@ -35,18 +35,21 @@ def database_lookup(entity: str) -> str:
 
 # Database Lookup Tool
 @tool
-def domande_simulazione_quiz(entity: str, categoria: str = None) -> str:
-    """Restituisce domande e risposte da utilizzare per fare simulazioni del quiz di teoria"""
-    logger.info(f"Database lookup for entity: {entity} in categoria: {categoria}")
+def domande_simulazione_quiz(entity: str) -> str:
+    """Restituisce domande da utilizzare per fare simulazioni del quiz di teoria
+    entity: string = "quiz"
+    """
+    # categoria = categoria or "generale"
+    logger.info(f"Database lookup for entity: {entity}")
    
     try:
         # Mock database with predefined entities
         db = QuizMongoDBService()
         # Get data based on categoria if none get all questions
-        if categoria:
-            question = db.get_random_question_by_field("categoria", categoria)
-        else:
-            question = db.get_random_question()
+        # if categoria:
+        #     question = db.get_random_question_by_field("categoria", categoria)
+        # else:
+        question = db.get_random_question()
 
         logger.info(f"Selected question: {question['_id']} {question['content']}")
         answers_dict = question["possible_answers"]
@@ -58,8 +61,8 @@ def domande_simulazione_quiz(entity: str, categoria: str = None) -> str:
 
 # Dictionary of available tools
 AVAILABLE_TOOLS = {
-    "domande_simulazione_quiz": domande_simulazione_quiz,
-    "database_lookup": database_lookup
+    "domande_simulazione_quiz": domande_simulazione_quiz
+    # "database_lookup": database_lookup
 }
 
 if __name__ == "__main__":

@@ -53,11 +53,15 @@ class MongoDBService(DatabaseInterface):
         Returns:
             A random item document, or None if no items are found.
         """
-        items = list(self.db[collection].aggregate([
-            {"$sample": {"size": 1}}
-        ]))
-        return items[0] if items else None
-    
+        try:
+            items = list(self.db[collection].aggregate([
+                {"$sample": {"size": 1}}
+            ]))
+            return items[0] if items else None
+        except Exception as e:
+            logger.error(f"Error getting random item from {collection}: {e}")
+            return None
+
     def get_random_item_by_field(self, field: str, value: Any, collection: str) -> Optional[Dict[str, Any]]:
         """
         Get a random item from the specified collection that matches a field value.
