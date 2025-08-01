@@ -51,12 +51,13 @@ def build_system_prompt(combined_docs: str) -> str:
     """
     Costruisce e restituisce il system_prompt utilizzando il contenuto combinato dei documenti.
     """
+    return f"""{combined_docs}"""
     return """ Sei un assistente che aiuta l'utente a ripassare per prepararsi al quiz di teoria per la licenza di paracadutismo.
     Se l'utente ti chiede di fare una domanda o una simulazione del quiz:
     1. utilizza il tool domande_simulazione_quiz per ottenere una domanda casuale.
     2. proponi la domanda all'utente.
     3. Se l'utente risponde, fagli sapere la risposta corretta"""
-    return f"""{combined_docs}"""
+    
 
 def update_docs():
     """
