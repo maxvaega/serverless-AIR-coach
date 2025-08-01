@@ -12,12 +12,13 @@ logger = logging.getLogger(__name__)
 class QuizMongoDBService():
     """Service for interacting with MongoDB database."""
     
-    def __init__(self, database_name: str = "quiz"):
+    def __init__(self, database_name: str = "quiz", collection_name: str = "prod"):
         """Initialize the MongoDB service with credentials from settings."""
         self.db = MongoDBService(database_name)
+        self.collection_name = collection_name
     
     # Quiz operations
-    def get_quiz_question(self, question_id: str, collection: str = "dev") -> Optional[Dict[str, Any]]:
+    def get_quiz_question(self, question_id: str) -> Optional[Dict[str, Any]]:
         """
         Get a quiz question by ID.
         
@@ -27,9 +28,9 @@ class QuizMongoDBService():
         Returns:
             The question document, or None if not found.
         """
-        return self.db.get_item(collection, question_id)
+        return self.db.get_item(self.collection_name, question_id)
     
-    def get_random_question(self, collection: str = "dev") -> Optional[Dict[str, Any]]:
+    def get_random_question(self) -> Optional[Dict[str, Any]]:
         """
         Get a random quiz question from the database.
         
@@ -39,9 +40,9 @@ class QuizMongoDBService():
         Returns:
             A random question document, or None if no questions are found.
         """
-        return self.db.get_random_item(collection)
+        return self.db.get_random_item(self.collection_name)
     
-    def get_random_question_by_field(self, field: str, value: str, collection: str = "dev") -> Optional[Dict[str, Any]]:
+    def get_random_question_by_field(self, field: str, value: str) -> Optional[Dict[str, Any]]:
         """
         Get a random quiz question from a specific chapter.
         
@@ -52,9 +53,9 @@ class QuizMongoDBService():
         Returns:
             A random question document from the specified chapter, or None if no questions are found.
         """
-        return self.db.get_random_item_by_field(field, value, collection)
+        return self.db.get_random_item_by_field(field, value, self.collection_name)
 
-    def get_category_questions(self, category: str, collection: str = "dev") -> List[Dict[str, Any]]:
+    def get_category_questions(self, category: str) -> List[Dict[str, Any]]:
         """
         Get all questions for a specific category.
         
@@ -64,9 +65,9 @@ class QuizMongoDBService():
         Returns:
             A list of question documents in the specified category.
         """
-        return self.db.get_items(collection, {"categoria": category})
+        return self.db.get_items(self.collection_name, {"categoria": category})
     
-    def get_capitolo_questions(self, capitolo: str, collection: str = "dev") -> List[Dict[str, Any]]:
+    def get_capitolo_questions(self, capitolo: str) -> List[Dict[str, Any]]:
         """
         Get all questions for a specific chapter (capitolo).
         
@@ -76,9 +77,9 @@ class QuizMongoDBService():
         Returns:
             A list of question documents in the specified chapter.
         """
-        return self.db.get_items(collection, {"capitolo": capitolo})
+        return self.db.get_items(self.collection_name, {"capitolo": capitolo})
     
-    def get_capitolo_category_questions(self, capitolo: str, category: str, collection: str = "dev") -> List[Dict[str, Any]]:
+    def get_capitolo_category_questions(self, capitolo: str, category: str) -> List[Dict[str, Any]]:
         """
         Get all questions for a specific chapter and category.
         
@@ -89,18 +90,18 @@ class QuizMongoDBService():
         Returns:
             A list of question documents in the specified chapter and category.
         """
-        return self.db.get_items(collection, {"capitolo": capitolo, "categoria": category})
+        return self.db.get_items(self.collection_name, {"capitolo": capitolo, "categoria": category})
     
-    def get_all_questions(self, collection: str = "dev") -> List[Dict[str, Any]]:
+    def get_all_questions(self) -> List[Dict[str, Any]]:
         """
         Get all quiz questions.
         
         Returns:
             A list of all question documents.
         """
-        return self.db.get_items(collection)
+        return self.db.get_items(self.collection_name)
     
-    def insert_quiz_questions(self, questions: List[Dict[str, Any]], collection: str = "dev") -> List[str]:
+    def insert_quiz_questions(self, questions: List[Dict[str, Any]]) -> List[str]:
         """
         Insert multiple quiz questions into the database.
         
@@ -110,9 +111,9 @@ class QuizMongoDBService():
         Returns:
             A list of inserted question IDs.
         """
-        return self.db.insert_items(collection, questions)
+        return self.db.insert_items(self.collection_name, questions)
     
-    def update_quiz_question(self, question_id: str, question_data: Dict[str, Any], collection: str = "dev") -> bool:
+    def update_quiz_question(self, question_id: str, question_data: Dict[str, Any]) -> bool:
         """
         Update a quiz question by ID.
         
@@ -123,4 +124,4 @@ class QuizMongoDBService():
         Returns:
             True if the update was successful, False otherwise.
         """
-        return self.db.update_item(collection, question_id, question_data)
+        return self.db.update_item(self.collection_name, question_id, question_data)

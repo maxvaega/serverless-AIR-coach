@@ -35,34 +35,30 @@ def database_lookup(entity: str) -> str:
 
 # Database Lookup Tool
 @tool
-def domande_simulazione_quiz(entity: str, categoria: str = None) -> str:
+def domande_simulazione_quiz(entity: str, capitolo: int = None) -> str:
     """Restituisce domande e risposte da utilizzare per fare simulazioni del quiz di teoria"""
-    logger.info(f"Database lookup for entity: {entity} in categoria: {categoria}")
+    logger.info(f"Database lookup for entity: {entity} in capitolo: {capitolo}")
    
     try:
         # Mock database with predefined entities
         db = QuizMongoDBService()
         # Get data based on categoria if none get all questions
-        if categoria:
-            question = db.get_random_question_by_field("categoria", categoria)
+        if capitolo:
+            question = db.get_random_question_by_field("capitolo", capitolo)
         else:
             question = db.get_random_question()
 
-        logger.info(f"Selected question: {question['_id']} {question['content']}")
-        answers_dict = question["possible_answers"]
+        question_text = question['domanda']['testo']
+        logger.info(f"Selected question: {question['_id']} {question_text}")
+        answers_dict = {item['id']: item['testo'] for item in question['domanda']['opzioni']}
         answers_str = "\n".join([f"{k}) {v}" for k, v in answers_dict.items()])
     
-        return f"Domanda: {question['content']}\nRisposte possibili:\n{answers_str}"
+        return f"Domanda: {question_text}\nRisposte possibili:\n{answers_str}"
     except Exception as e:
         logger.error(f"Error during database lookup: {e}")
 
 # Dictionary of available tools
 AVAILABLE_TOOLS = {
-    "domande_simulazione_quiz": domande_simulazione_quiz,
+    "get_domande_quiz": domande_simulazione_quiz,
     "database_lookup": database_lookup
 }
-
-if __name__ == "__main__":
-    quiz_entity = "domanda"
-    categoria = "generale"
-    print(domande_simulazione_quiz(quiz_entity, categoria))

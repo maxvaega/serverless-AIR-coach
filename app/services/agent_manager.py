@@ -123,7 +123,7 @@ class AgentManager:
         )
         
         # Get the requested tools
-        tool_names= ["domande_simulazione_quiz", "database_lookup"]
+        tool_names= ["get_domande_quiz"]
         tools = []
         for tool_name in tool_names:
             if tool_name in AVAILABLE_TOOLS:
