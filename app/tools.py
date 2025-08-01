@@ -44,7 +44,7 @@ def domande_simulazione_quiz(entity: str, capitolo: int = None) -> str:
         db = QuizMongoDBService()
         # Get data based on categoria if none get all questions
         if capitolo:
-            question = db.get_random_question_by_field("capitolo", capitolo)
+            question = db.get_random_question_by_field("capitolo.numero", capitolo)
         else:
             question = db.get_random_question()
 

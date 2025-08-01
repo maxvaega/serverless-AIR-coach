@@ -67,7 +67,7 @@ class QuizMongoDBService():
         """
         return self.db.get_items(self.collection_name, {"categoria": category})
     
-    def get_capitolo_questions(self, capitolo: str) -> List[Dict[str, Any]]:
+    def get_capitolo_questions(self, capitolo: int) -> List[Dict[str, Any]]:
         """
         Get all questions for a specific chapter (capitolo).
         
@@ -77,7 +77,7 @@ class QuizMongoDBService():
         Returns:
             A list of question documents in the specified chapter.
         """
-        return self.db.get_items(self.collection_name, {"capitolo": capitolo})
+        return self.db.get_items(self.collection_name, {"capitolo.numero": capitolo})
     
     def get_capitolo_category_questions(self, capitolo: str, category: str) -> List[Dict[str, Any]]:
         """
