@@ -1,25 +1,20 @@
 import logging
-from typing import Dict, List, Optional, Any, Union, cast, Iterable
-import uuid
-import re
-from collections import Counter
-from pydantic import SecretStr
+from typing import List, Optional
 from datetime import datetime
-import asyncio
-from app.database import get_data, insert_data
+import json
 from app.services.database.database_service import MongoDBService
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
-# from langchain_openai import ChatOpenAI
 
 from app.config import settings
 from app.tools import AVAILABLE_TOOLS
 import threading
-from app.s3_utils import fetch_docs_from_s3, create_prompt_file
+from app.s3_utils import fetch_docs_from_s3
+from app.cache import get_cached_user_data, set_cached_user_data
+from app.auth0 import get_user_metadata
+from app.utils import format_user_metadata
 
 logger = logging.getLogger("uvicorn")
 
@@ -51,13 +46,7 @@ def build_system_prompt(combined_docs: str) -> str:
     """
     Costruisce e restituisce il system_prompt utilizzando il contenuto combinato dei documenti.
     """
-    return f"""{combined_docs}"""
-    return """ Sei un assistente che aiuta l'utente a ripassare per prepararsi al quiz di teoria per la licenza di paracadutismo.
-    Se l'utente ti chiede di fare una domanda o una simulazione del quiz:
-    1. utilizza il tool domande_simulazione_quiz per ottenere una domanda casuale.
-    2. proponi la domanda all'utente.
-    3. Se l'utente risponde, fagli sapere la risposta corretta"""
-    
+    return f"""{combined_docs}"""    
 
 def update_docs():
     """
@@ -98,8 +87,6 @@ class AgentManager:
     checkpointers = {}
     # Store agent metadata for selection
     agent_metadata = {}
-    # Store additional information for agents
-    agent_additional_query = {}
 
     @staticmethod
     def create_agent(
@@ -107,8 +94,7 @@ class AgentManager:
         name: str,
         prompt: str, 
         model_name: str,
-        tool_names: List[str],
-        additional_query: Dict[str, Any] = {}
+        tool_names: List[str]
     ):
         # Check if agent already exists in memory
         if agent_id in AgentManager.agents:
@@ -124,7 +110,6 @@ class AgentManager:
         )
         
         # Get the requested tools
-        tool_names= ["get_domande_quiz"]
         tools = []
         for tool_name in tool_names:
             if tool_name in AVAILABLE_TOOLS:
@@ -151,9 +136,6 @@ class AgentManager:
             "prompt": prompt
         }
         
-        # Store additional information
-        AgentManager.agent_additional_query[agent_id] = additional_query
-        
         return {
             "agent_id": agent_id,
             "name": name,
@@ -166,9 +148,6 @@ class AgentManager:
     def get_agent(agent_id: str):
         # Check if agent is already loaded
         if agent_id not in AgentManager.agents:
-            # Get database service
-            # Try to load from database or S3
-     
             # Recreate the agent
             AgentManager.create_agent(
                 "air-coach",
@@ -183,21 +162,6 @@ class AgentManager:
             "checkpointer": AgentManager.checkpointers[agent_id],
             "metadata": AgentManager.agent_metadata[agent_id]
         }
-
-    @staticmethod
-    def load_agents_from_db():
-        # Get database service
-        
-        # Get all agents from database
-        AgentManager.create_agent(
-                        "air-coach",
-                        "air-coach",
-                        system_prompt,
-                        "gemini-2.5-flash",
-                        ["get_quiz_domande"]
-                    )
-    
-        logger.info(f"Loaded agent from storage")
     
     @staticmethod
     async def process_chat(
@@ -205,7 +169,10 @@ class AgentManager:
         agent_id: Optional[str],
         thread_id: str,
         user_id: Optional[str] = None,
-        include_history: bool = False
+        include_history: Optional[bool] = False,
+        user_data: Optional[bool] = False, 
+        token: str = None,
+        stream: Optional[bool] = False
     ):
         """
         Process a chat query using the appropriate agent.
@@ -217,22 +184,18 @@ class AgentManager:
             agent_id: Optional ID of the agent to use
             thread_id: ID of the conversation thread
             user_id: Optional ID of the user
-            user_info: Optional additional information about the user
-            additional_prompts: Optional additional_prompts for the agent (language, units, etc.)
+            user_data: Optional additional information about the user
             include_history: Whether to include chat history in the context
-            include_documents: Whether to include document content in context
+            token: Optional authentication token for user data retrieval
         """
         # If no agent_id provided, select the most appropriate agent
         logger.info(f"Processing chat with query: {query}, agent_id: {agent_id}, thread_id: {thread_id}, user_id: {user_id}")
+
         # Get the agent
         agent_info = AgentManager.get_agent(agent_id)
         logger.info(f"Using agent: {agent_info['metadata']['name']} with ID: {agent_id}")
         agent = agent_info["agent"]
         metadata = agent_info["metadata"]
-        
-        # Get current date and time
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        current_time = datetime.now().strftime("%H:%M:%S")
         
         # Add document content if available and requested
 
@@ -241,6 +204,21 @@ class AgentManager:
             "messages": [
             ]
         }
+        previous_messages = []
+        try:
+            if user_data:
+                # Recupera i dati utente dalla cache
+                user_info = get_cached_user_data(user_id)
+                if not user_info:
+                    # Recupera i metadata da Auth0
+                    user_metadata = get_user_metadata(user_id, token=token)
+                    user_info = format_user_metadata(user_metadata)
+                    set_cached_user_data(user_id, user_info)
+                if user_info:
+                    previous_messages.append({"role": "assistant", "content": user_info})
+        except Exception as e:
+            logger.error(f"An error occurred while retrieving user data: {e}")
+            return f"data: {{'error': 'An error occurred while retrieving user data: {str(e)}'}}\n\n"
         
         history_limit = 10
 
@@ -252,7 +230,7 @@ class AgentManager:
                     query={"userId": user_id},
                     limit=history_limit
                 )
-                previous_messages = []
+                
                 for msg in history:
                     previous_messages.append({"role": "human", "content": msg["human"]})
                     previous_messages.append({"role": "assistant", "content": msg["system"]})
@@ -269,32 +247,70 @@ class AgentManager:
         agent_input["messages"].append({"role": "user", "content": query })
         logger.info(f"Agent input updated with user query: {query}")
         
-        # Invoke the agent with the thread_id for state persistence
-        final_state = agent.invoke(
-            agent_input,
-            config={"configurable": {"thread_id": thread_id}}
-        )
-        
-        # Extract the response
-        response = final_state["messages"][-1].content
-
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        logger.info(f"Response completed at {timestamp}: {response}")
-        data = {}
-        try:
-            data = {
-                "human": query,
-                "system": response,
-                "userId": user_id,
-                "agentId": agent_id,
-                "timestamp": timestamp
-            }
-            db.insert_items(
-                collection=settings.COLLECTION_NAME,
-                items=[data]
+        if not stream:
+            # Invoke the agent with the thread_id for state persistence
+            final_state = agent.invoke(
+                agent_input,
+                config={"configurable": {"thread_id": thread_id}}
             )
-            logger.info(f"Response inserted into the collection: {settings.COLLECTION_NAME} ")
-        except Exception as e:
-            logger.error(f"An error occurred while inserting the data into the collection: {e}")
+            
+            # Extract the response
+            response = final_state["messages"][-1].content
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logger.info(f"Response completed at {timestamp}: {response}")
+            data = {}
+            try:
+                data = {
+                    "human": query,
+                    "system": response,
+                    "userId": user_id,
+                    "agentId": agent_id,
+                    "timestamp": timestamp
+                }
+                db.insert_items(
+                    collection=settings.COLLECTION_NAME,
+                    items=[data]
+                )
+                logger.info(f"Response inserted into the collection: {settings.COLLECTION_NAME} ")
+            except Exception as e:
+                logger.error(f"An error occurred while inserting the data into the collection: {e}")
+            return f"data: {{'data': '{response}'}}\n\n"
+        else:
+            response_chunks = []
+            async def stream_response():
+                try:
+                    for event in agent.stream(input=agent_input, config={"configurable": {"thread_id": thread_id}}):
+                        content = event['agent']['messages'][0].content
+                        response_chunks.append(content)
+                        data_dict = {"data": content}
+                        data_json = json.dumps(data_dict)
+                        yield f"data: {data_json}\n\n"
+                        logger.info(f"event= {event}")
+                except Exception as e:
+                    logger.error(f"An error occurred while streaming the response: {e}")
+                    yield f"data: {{'error': 'An error occurred while streaming the response: {str(e)}'}}\n\n"
+                # Insert the data into the MongoDB collection
+                
+                response = "".join(response_chunks)
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                logger.info(f"Response completed at {timestamp}: {response}")
+                data = {}
+                try:
+                    data = {
+                        "human": query,
+                        "system": response,
+                        "userId": user_id,
+                        "agentId": agent_id,
+                        "timestamp": timestamp
+                    }
+                    db.insert_items(
+                        collection=settings.COLLECTION_NAME,
+                        items=[data]
+                    )
+                    logger.info(f"Response inserted into the collection: {settings.COLLECTION_NAME} ")
+                except Exception as e:
+                    logger.error(f"An error occurred while inserting the data into the collection: {e}")
+                    yield f"data: {{'error': 'An error occurred while inserting the data into the collection: {str(e)}'}}\n\n"
+            return stream_response()
 
-        return data
+        

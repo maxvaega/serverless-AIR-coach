@@ -42,18 +42,24 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():    
     try:
-        AgentManager.load_agents_from_db()
+        from app.services.agent_manager import system_prompt
+        AgentManager.create_agent(
+                        "air-coach",
+                        "air-coach",
+                        system_prompt,
+                        settings.FORCED_MODEL.split("/")[-1],
+                        ["get_quiz_domande"]
+                    )
     except Exception as e:
         logger.error(f"Error during startup: {str(e)}")
 
-@api_router.get("/test")
-async def test():
-    """
-    Test endpoint to verify the API is running.
-    """
-    logger.info("Test endpoint called")
-    return {"message": "API is running successfully!"}
-
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Check if the API is running"""
+    return {
+        "status": "healthy"
+    }
 
 #############################################
 # FastAPI Endpoints
@@ -61,22 +67,17 @@ async def test():
 
 @api_router.post("/stream_agent")
 async def stream_endpoint(
-    request: MessageRequest
+    request: MessageRequest,
+    auth_result: dict = Security(auth.verify)
 ):
     try:
         # Ensure thread_id is not None
         thread_id = str(uuid.uuid4())
-        logger.info(f"Request received: \ntoken= \nmessage= {request.message}\nuserid= {request.userid}\nthread_id= {thread_id}")
-        # Process the chat request through the agent manager
-        result = await AgentManager.process_chat(
-            query = request.message,
-            agent_id = "air-coach",
-            thread_id=thread_id,
-            include_history=True,
-            user_id=request.userid
-        )
-        
-        return result
+        token = auth_result.get('access_token') or auth_result.get('token')
+        logger.info(f"Request received: \ntoken= {token}\nmessage= {request.message}\nuserid= {request.userid}\nthread_id= {thread_id}")
+        stream_response = await AgentManager.process_chat(request.message, "air-coach", thread_id, request.userid, include_history=True, user_data=True, token=token, stream=True)
+        return StreamingResponse(stream_response, media_type="text/event-stream")
+    
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
