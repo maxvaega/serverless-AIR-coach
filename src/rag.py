@@ -1,5 +1,5 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, AIMessageChunk
 from .logging_config import logger
 import datetime
 from .env import *
@@ -11,17 +11,20 @@ from .cache import get_cached_user_data, set_cached_user_data
 from .s3_utils import fetch_docs_from_s3, create_prompt_file
 import threading
 
+# Import agent creation tools
+from langgraph.prebuilt import create_react_agent
+from .tools import test_licenza, reperire_documentazione_air_coach
+
 _docs_cache = {
     "content": None,
     "docs_meta": None,
     "timestamp": None 
 }
-update_docs_lock = threading.Lock()  # Lock per sincronizzare gli aggiornamenti manuali
+update_docs_lock = threading.Lock()
 
 def get_combined_docs():
     """
     Restituisce il contenuto combinato dei file Markdown usando la cache se disponibile.
-    Aggiorna anche i metadati se la cache è vuota.
     """
     global _docs_cache
     if (_docs_cache["content"] is None) or (_docs_cache["docs_meta"] is None):
@@ -44,8 +47,6 @@ def build_system_prompt(combined_docs: str) -> str:
 def update_docs():
     """
     Forza l'aggiornamento della cache dei documenti da S3 e rigenera il system_prompt.
-    Aggiorna anche i metadati dei file e restituisce, nella response, il numero di documenti e per ognuno:
-    il titolo e la data di ultima modifica.
     """
     global _docs_cache, combined_docs, system_prompt
     with update_docs_lock:
@@ -58,11 +59,8 @@ def update_docs():
         combined_docs = _docs_cache["content"]
         system_prompt = build_system_prompt(combined_docs)
         logger.info("Docs Cache and system_prompt updated successfully.")
-
-        # Prepara i dati da ritornare: numero di documenti e metadati
         docs_count = len(result["docs_meta"])
         docs_details = result["docs_meta"]
-
         return {
             "message": "Document cache and system prompt updated successfully.",
             "docs_count": docs_count,
@@ -83,29 +81,25 @@ llm = ChatGoogleGenerativeAI(
     cache=True,
 )
 
+# Define Tools and Agent
+tools = [test_licenza, reperire_documentazione_air_coach]
+agent_executor = create_react_agent(llm, tools)
+
 def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False, token: str = None):
     """
-    Processes a user query and returns a response, optionally streaming the response.
-
-    This function uses a combination of retrieval and chain mechanisms to process the query
-    and generates a response. If chat history is provided, it extends the messages with the
-    chat history and appends the new query. The function supports both synchronous and
-    asynchronous streaming of responses. In streaming mode, it yields chunks of data and
-    inserts the final response into a MongoDB collection.
-
-    :param query: The user query to process.
-    :param user_id: The ID of the user making the query.
-    :param chat_history: Optional; A list of previous chat messages to include in the context.
-    :param stream: Optional; If True, streams the response asynchronously.
-    :return: The response to the query, either as a single result or a generator for streaming.
+    Processes a user query using a LangChain agent and returns a response, optionally streaming.
+    The agent can decide to use tools like `test_licenza` or `reperire_documentazione_air_coach`.
+    Memory is handled manually by fetching history from MongoDB.
     """
+    # NOTE: The system prompt is handled by including it in the messages list.
+    # The agent will receive it as the first message.
     messages = [SystemMessage(system_prompt)]
+
+    # NOTE: User data retrieval logic is preserved as per instructions.
     try:
         if user_data:
-            # Recupera i dati utente dalla cache
             user_info = get_cached_user_data(user_id)
             if not user_info:
-                # Recupera i metadata da Auth0
                 user_metadata = get_user_metadata(user_id, token=token)
                 user_info = format_user_metadata(user_metadata)
                 set_cached_user_data(user_id, user_info)
@@ -115,54 +109,74 @@ def ask(query, user_id, chat_history=False, stream=False, user_data: bool = Fals
         logger.error(f"An error occurred while retrieving user data for user ID {user_id}: {e}")
         return f"data: {{'error': 'An error occurred while retrieving user data: {str(e)}'}}\n\n"
     
+    # NOTE: Manual chat history management is preserved as per instructions.
     history_limit = 10
-
     try:
         if chat_history:
             history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
             for msg in history:
                 messages.append(HumanMessage(msg["human"]))
                 messages.append(AIMessage(msg["system"]))
-        messages.append(HumanMessage(query))
-
     except Exception as e:
         logger.error(f"An error occurred while retrieving chat history: {e}")
         return f"data: {{'error': 'An error occurred while retrieving chat history: {str(e)}'}}\n\n"
 
+    # Append the current user query
+    messages.append(HumanMessage(query))
+
     if not stream:
-        return llm.invoke(messages)
+        # Synchronous invocation (not the primary use case for this app)
+        try:
+            result = agent_executor.invoke({"messages": messages})
+            # The final response is in the 'messages' list, typically the last one.
+            final_response = result['messages'][-1].content
+            return final_response
+        except Exception as e:
+            logger.error(f"An error occurred during agent invocation: {e}")
+            return "An error occurred while processing your request."
+
     else:
+        # Asynchronous streaming invocation
         response_chunks = []
 
         async def stream_response():
             try:
-                for event in llm.stream(input=messages):
-                    content = event.content
-                    response_chunks.append(content)
-                    data_dict = {"data": content}
-                    data_json = json.dumps(data_dict)
-                    yield f"data: {data_json}\n\n"
-                    logger.info(f"event= {event}")
+                # The agent stream yields a sequence of events (dicts)
+                # We are interested in the AI message chunks
+                async for event in agent_executor.astream_events({"messages": messages}, version="v2"):
+                    kind = event["event"]
+                    if kind == "on_chat_model_stream":
+                        chunk = event["data"]["chunk"]
+                        if isinstance(chunk, AIMessageChunk):
+                            content = chunk.content
+                            if content:
+                                response_chunks.append(content)
+                                data_dict = {"data": content}
+                                data_json = json.dumps(data_dict)
+                                yield f"data: {data_json}\n\n"
+                                logger.debug(f"Streamed chunk: {content}")
+
             except Exception as e:
-                logger.error(f"An error occurred while streaming the response: {e}")
+                logger.error(f"An error occurred while streaming the agent response: {e}")
                 yield f"data: {{'error': 'An error occurred while streaming the response: {str(e)}'}}\n\n"
-            # Insert the data into the MongoDB collection
             
+            # After streaming, save the complete response to DB
             response = "".join(response_chunks)
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             logger.info(f"Response completed at {timestamp}: {response}")
 
             try:
-                
                 data = {
                     "human": query,
                     "system": response,
                     "userId": user_id,
                     "timestamp": timestamp
                 }
-                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                logger.info(f"Response inserted into the collection: {COLLECTION_NAME} ")
+                if response: # Only insert if the response is not empty
+                    insert_data(DATABASE_NAME, COLLECTION_NAME, data)
+                    logger.info(f"Response inserted into the collection: {COLLECTION_NAME} ")
             except Exception as e:
-                logger.error(f"An error occurred while inserting the data into the collection: {e}")
-                yield f"data: {{'error': 'An error occurred while inserting the data into the collection: {str(e)}'}}\n\n"
+                logger.error(f"An error occurred while inserting data into the collection: {e}")
+                # Do not yield error to client here as the stream is already closed
+
         return stream_response()
