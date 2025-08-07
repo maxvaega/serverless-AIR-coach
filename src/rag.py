@@ -16,6 +16,9 @@ from .utils import get_combined_docs, update_docs_from_s3
 from langgraph.prebuilt import create_react_agent
 from .tools import test_licenza, reperire_documentazione_air_coach
 
+import langchain
+# from langchain_community.cache import InMemoryCache
+
 
 def build_system_prompt(combined_docs: str) -> str:
     """
@@ -50,7 +53,7 @@ logger.info(f"Selected LLM model: {model}")
 llm = ChatGoogleGenerativeAI(
     model=model,
     temperature=0.7,
-    cache=True,
+    # cache=True,
 )
 
 # Define Tools and Agent
