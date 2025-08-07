@@ -2,6 +2,8 @@ from typing import Dict
 import datetime
 import re
 from .logging_config import logger
+import threading
+from .s3_utils import fetch_docs_from_s3
 
 def format_user_metadata(user_metadata: Dict) -> str:
     """
@@ -119,3 +121,54 @@ def validate_user_id(user_id):
         return True
     else:
         return False
+
+_docs_cache = {
+    "content": None,
+    "docs_meta": None,
+    "timestamp": None
+}
+update_docs_lock = threading.Lock()
+
+def get_combined_docs():
+    """
+    Restituisce il contenuto combinato dei file Markdown usando la cache se disponibile.
+    """
+    global _docs_cache
+    if (_docs_cache["content"] is None) or (_docs_cache["docs_meta"] is None):
+        logger.info("Docs: cache is empty. Fetching from S3...")
+        now = datetime.datetime.utcnow()
+        result = fetch_docs_from_s3()
+        _docs_cache["content"] = result["combined_docs"]
+        _docs_cache["docs_meta"] = result["docs_meta"]
+        _docs_cache["timestamp"] = now
+    else:
+        logger.info("Docs: found valid cache in use. no update triggered.")
+    return _docs_cache["content"]
+
+def update_docs_from_s3():
+    """
+    Forza l'aggiornamento della cache dei documenti da S3.
+    Questa funzione aggiorna la cache `_docs_cache` e restituisce i dati aggiornati.
+    """
+    with update_docs_lock:
+        logger.info("Docs: manual update in progress...")
+        now = datetime.datetime.utcnow()
+        result = fetch_docs_from_s3()
+        _docs_cache["content"] = result["combined_docs"]
+        _docs_cache["docs_meta"] = result["docs_meta"]
+        _docs_cache["timestamp"] = now
+        logger.info("Docs Cache updated successfully.")
+
+        # Prepara i dati da ritornare
+        docs_count = len(result["docs_meta"])
+        docs_details = result["docs_meta"]
+
+        # Costruisce un system_prompt temporaneo da ritornare, non modifica variabili globali
+        system_prompt = result["combined_docs"]
+
+        return {
+            "message": "Document cache and system prompt updated successfully.",
+            "docs_count": docs_count,
+            "docs_details": docs_details,
+            "system_prompt": system_prompt
+        }

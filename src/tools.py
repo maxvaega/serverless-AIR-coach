@@ -1,6 +1,6 @@
 import random
 from langchain_core.tools import tool
-from .rag import get_combined_docs
+from .utils import get_combined_docs
 
 # Mock database of questions
 mock_db = [
