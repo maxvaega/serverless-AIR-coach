@@ -10,33 +10,12 @@ from .utils import format_user_metadata
 from .cache import get_cached_user_data, set_cached_user_data
 from .s3_utils import fetch_docs_from_s3, create_prompt_file
 import threading
+from .utils import get_combined_docs, update_docs_from_s3
 
 # Import agent creation tools
 from langgraph.prebuilt import create_react_agent
 from .tools import test_licenza, reperire_documentazione_air_coach
 
-_docs_cache = {
-    "content": None,
-    "docs_meta": None,
-    "timestamp": None 
-}
-update_docs_lock = threading.Lock()
-
-def get_combined_docs():
-    """
-    Restituisce il contenuto combinato dei file Markdown usando la cache se disponibile.
-    """
-    global _docs_cache
-    if (_docs_cache["content"] is None) or (_docs_cache["docs_meta"] is None):
-        logger.info("Docs: cache is empty. Fetching from S3...")
-        now = datetime.datetime.utcnow()
-        result = fetch_docs_from_s3()
-        _docs_cache["content"] = result["combined_docs"]
-        _docs_cache["docs_meta"] = result["docs_meta"]
-        _docs_cache["timestamp"] = now
-    else:
-        logger.info("Docs: found valid cache in use. no update triggered.")
-    return _docs_cache["content"]
 
 def build_system_prompt(combined_docs: str) -> str:
     """
@@ -46,27 +25,20 @@ def build_system_prompt(combined_docs: str) -> str:
 
 def update_docs():
     """
-    Forza l'aggiornamento della cache dei documenti da S3 e rigenera il system_prompt.
+    Wrapper function to update docs.
+    Calls the core logic in utils.py and updates the global state of this module.
     """
-    global _docs_cache, combined_docs, system_prompt
-    with update_docs_lock:
-        logger.info("Docs: manual update in progress...")
-        now = datetime.datetime.utcnow()
-        result = fetch_docs_from_s3()
-        _docs_cache["content"] = result["combined_docs"]
-        _docs_cache["docs_meta"] = result["docs_meta"]
-        _docs_cache["timestamp"] = now
-        combined_docs = _docs_cache["content"]
+    global combined_docs, system_prompt
+
+    update_result = update_docs_from_s3()
+
+    # Update global variables in this module
+    if update_result and "system_prompt" in update_result:
+        combined_docs = update_result["system_prompt"]
         system_prompt = build_system_prompt(combined_docs)
-        logger.info("Docs Cache and system_prompt updated successfully.")
-        docs_count = len(result["docs_meta"])
-        docs_details = result["docs_meta"]
-        return {
-            "message": "Document cache and system prompt updated successfully.",
-            "docs_count": docs_count,
-            "docs_details": docs_details,
-            "system_prompt": system_prompt
-        }
+        logger.info("RAG module state updated successfully.")
+
+    return update_result
 
 # Load Documents from S3 on load to build prompt
 combined_docs = get_combined_docs()
