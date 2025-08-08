@@ -6,12 +6,12 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
 
 ## Flusso End-to-End: /stream_query
 
-1. **Autenticazione**: L'endpoint `/api/stream_query` richiede autenticazione JWT tramite Auth0, validata dalla classe `VerifyToken` (src/auth.py).
-2. **Ricezione Richiesta**: Il payload deve essere conforme al modello `MessageRequest` (src/models.py).
-3. **Costruzione Prompt**: Il system prompt viene costruito combinando i file Markdown dal bucket S3 (src/rag.py), con eventuali metadati utente recuperati da Auth0 e formattati.
-4. **Gestione Chat History**: Se richiesto, vengono recuperati gli ultimi 10 messaggi dalla collezione MongoDB e aggiunti al contesto.
-5. **Chiamata LLM**: Il prompt viene inviato al modello Gemini 2.0 Flash tramite langchain_google_genai. Se `stream=True`, la risposta viene inviata come stream SSE.
-6. **Persistenza**: Al termine dello streaming, domanda e risposta vengono salvate su MongoDB.
+1. Autenticazione: L'endpoint `/api/stream_query` richiede autenticazione JWT tramite Auth0, validata dalla classe `VerifyToken` (src/auth.py).
+2. Ricezione Richiesta: Il payload deve essere conforme al modello `MessageRequest` (src/models.py).
+3. Costruzione Prompt: Il system prompt viene costruito combinando i file Markdown dal bucket S3 (src/rag.py), con eventuali metadati utente recuperati da Auth0 e formattati.
+4. Gestione Chat History: Per lo streaming la cronologia è sempre attiva; vengono recuperati gli ultimi 10 messaggi dalla collezione MongoDB e aggiunti al contesto.
+5. Chiamata LLM: Il prompt viene inviato al modello Gemini 2.0 Flash tramite langchain_google_genai. Se `stream=True`, la risposta viene inviata come stream SSE.
+6. Persistenza: Al termine dello streaming, domanda e risposta vengono salvate su MongoDB.
 
 ## Relazioni tra i File
 
@@ -40,6 +40,11 @@ app.py
 - **src/models.py**: Modelli Pydantic per request/response.
 - **src/logging_config.py**: Configurazione logging.
 - **src/test.py**: Script CLI per testare la funzione ask.
+
+## Autenticazione
+
+- `/api/stream_query`: richiede Bearer JWT valido emesso da Auth0. La verifica usa JWKS (`src/auth.py`), controllando `audience` e `issuer` configurati.
+- `/api/update_docs`: endpoint pubblico (nessuna autenticazione richiesta).
 
 ## Interfacce tra le Funzioni Principali
 
@@ -109,6 +114,10 @@ app.py
 
 ### src/test.py
 - Script CLI per testare la funzione `ask` da terminale.
+
+## Configurazione
+
+Per le variabili di ambiente, fare interamente riferimento al file `.env.example`.
 
 ## Considerazioni Finali
 

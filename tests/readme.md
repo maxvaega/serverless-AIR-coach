@@ -1,6 +1,6 @@
 # Test Plan per AIR Coach API
 
-Questo documento descrive una suite di test end-to-end (E2E) e unitari per validare il funzionamento della codebase AIR Coach API. Tutti i test sono pensati per essere eseguiti con `pytest`.
+Questo documento descrive la suite di test end-to-end (E2E) pensata per essere eseguita con `pytest`. I test unitari sono al momento non sviluppati.
 
 ---
 
@@ -8,24 +8,25 @@ Questo documento descrive una suite di test end-to-end (E2E) e unitari per valid
 stato: sviluppati
 
 ### 1.1. `/api/stream_query`
-- **Obiettivo:** Verificare che l'endpoint risponda correttamente a una richiesta autenticata e restituisca uno stream valido.
-- **Test:**
-  - Invio di una richiesta POST con JWT valido e payload conforme a `MessageRequest`.
-  - Verifica che la risposta sia uno stream SSE e contenga una risposta coerente. Nessuna logica per verificare il contenuto della risposta, solo il formato.
-  - Verifica che la chat venga salvata su MongoDB (saltare questo passo per adesso)
-  - Test con JWT non valido → risposta 401/403.
-  - Test con payload non valido → risposta 422.
-- **Dati:**
-  - token valido: fornito dall'utente a runtime (il token scade).
-  - userid: parametrizzato nell'applicazione
-  - message: parametrizzato nell'applicazione
+- Obiettivo: verificare che l'endpoint risponda correttamente a una richiesta autenticata e restituisca uno stream SSE valido.
+- Test implementati:
+  - Richiesta con token non valido → 401/403
+  - Richiesta senza token → 403
+  - Richiesta valida → 200 e presenza di linee SSE che iniziano con `data:`
+  - Payload non valido → 422 (es. `userid` mancante) [richiede token valido]
+- Dati:
+  - `TEST_AUTH_TOKEN`: facoltativo. Se non impostato, i test che richiedono un token valido proveranno a generarlo automaticamente tramite `src.auth0.get_auth0_token()` (client credentials)
+  - `userid`: parametrizzato (es. un `google-oauth2|...`)
+  - `message`: parametrizzato
+- Note SSE:
+  - I test consumano lo stream in modalità line-based per verificare correttamente i chunk SSE (`iter_lines`).
 
 ### 1.2. `/api/update_docs`
-- **Obiettivo:** Verificare che l'aggiornamento dei documenti aggiorni la cache e il system prompt.
-- **Test:**
-  - Invio di una richiesta POST.
-  - Verifica che la risposta contenga i dettagli aggiornati dei documenti e il nuovo prompt.
-  - Simulazione di errore S3 → risposta 500 (saltare questo passo per adesso).
+- Obiettivo: verificare che l’aggiornamento dei documenti aggiorni la cache e il system prompt.
+- Test implementati:
+  - Richiesta valida → 200 e presenza di `message`, `docs_count`, `docs_details` (lista), `system_prompt`, `prompt_file`
+- Autenticazione:
+  - Endpoint pubblico: non richiede `TEST_AUTH_TOKEN`
 
 ---
 
@@ -33,35 +34,25 @@ stato: sviluppati
 stato: non sviluppati
 
 ### 2.1. `src/rag.py`
-- **ask**
-  - Test con parametri minimi → risposta non vuota.
-  - Test con `user_data=True` → verifica che i metadati utente siano inclusi.
-  - Test con `chat_history=True` → verifica che la storia venga recuperata.
-  - Test con `stream=True` → verifica che venga restituito un generatore.
-- **update_docs**
-  - Test che aggiorni la cache e restituisca i dettagli corretti.
+- ask: stream/non-stream, `user_data=True`, `chat_history=True`
+- update_docs: aggiornamento cache e dettagli
 
 ### 2.2. `src/auth.py`
-- **VerifyToken**
-  - Test con JWT valido → payload corretto.
-  - Test con JWT non valido → eccezione.
+- VerifyToken: JWT valido/non valido
 
 ### 2.3. `src/auth0.py`
-- **get_auth0_token**
-  - Test recupero token e caching.
-- **get_user_metadata**
-  - Test recupero metadati utente (mock API).
+- get_auth0_token: recupero/caching
+- get_user_metadata: mock API
 
 ### 2.4. `src/cache.py`
-- Test inserimento e recupero dati utente.
-- Test inserimento e recupero token.
+- cache metadati/token
 
 ### 2.5. `src/database.py`
-- Test inserimento, recupero e cancellazione dati (mock MongoDB).
+- insert/find/drop (mock MongoDB)
 
 ### 2.6. `src/utils.py`
-- Test formattazione metadati utente.
-- Test validazione user_id.
+- format_user_metadata
+- validate_user_id
 
 ---
 
@@ -70,53 +61,58 @@ tbd
 
 ---
 
-## 4. Esempio di struttura test
-
-```
-tests/
-  test_app_e2e.py
-  test_rag.py
-  test_auth.py
-  test_auth0.py
-  test_cache.py
-  test_database.py
-  test_utils.py
-```
+## 4. Ambito dei test
+- Disponibile:
+  - E2E `/api/stream_query`: invalid token, no token, successo (SSE), payload non valido (422)
+  - E2E `/api/update_docs`: successo
+- Non disponibile:
+  - E2E errori S3 per `/api/update_docs` (500)
+  - Tutti i test unitari (backlog)
 
 ---
 
 ## 5. Comando di esecuzione
 
 ```sh
-pytest  -v -rs tests/
+pytest -v -rs tests/
 ```
 
 ---
 
 ## 6. Istruzioni
 
-Per eseguire i test:
+1) Installa le dipendenze:
+```sh
+pip install pytest httpx
+```
 
-1. Installa le dipendenze (non incluse in requirements.txt):
+2) (Opzionale) Esporta un token JWT valido per i test che richiedono autenticazione:
+```sh
+export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
+```
+   - Se non imposti `TEST_AUTH_TOKEN`, i test proveranno a ottenere un token tramite `src.auth0.get_auth0_token()` usando le variabili di ambiente Auth0 (`AUTH0_DOMAIN`, `AUTH0_SECRET`, `AUTH0_API_AUDIENCE`, `AUTH0_ISSUER`). In caso di fallimento, i test interessati verranno marcati come `skipped`.
 
-    ```sh
-    pip install pytest httpx
-    ```
+3) (Facoltativo) Seleziona l'URL del server da testare (default: `http://localhost:8080/api`)
+```sh
+export API_URL="https://server-da-testare/api"
+```
 
-2. Esporta un token JWT valido nella variabile d’ambiente TEST_AUTH_TOKEN:
+4) Avvia il backend e lancia i test:
+```sh
+# Tutti i test
+pytest -v -rs tests/
 
-    ```sh
-    export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
-    ```
+# Solo stream_query
+pytest -v -rs tests/stream_query.py
 
-3. (facoltativo) Seleziona l'url del server che vuoi testare - in caso contrario si connetterà automaticamente a localhost:8080/api
+# Solo update_docs (non richiede TEST_AUTH_TOKEN)
+pytest -v -rs tests/update_docs.py
+```
 
-    ```sh
-    export API_URL="http://www.testserver.com/api"
-    ```
+---
 
-4. Avvia il backend e lancia il set di test che vuoi eseguire es:
-
-    ```sh
-    pytest -v -rs tests/stream_query.py
-    ```
+## 7. Note operative
+- I test E2E dipendono da servizi esterni reali (Auth0, S3, MongoDB) e possono fallire in assenza di configurazioni o disponibilità dei servizi.
+- `API_URL` può puntare a ambienti diversi (locale, dev, prod).
+ - La generazione automatica del token usa un token di tipo client credentials; deve essere compatibile con la verifica JWT dell'API (audience/issuer coerenti). In caso contrario, imposta manualmente `TEST_AUTH_TOKEN`.
+ - `tests/conftest.py` aggiunge la root del progetto al `PYTHONPATH` per consentire gli import da `src.*` durante l'esecuzione di pytest.

@@ -21,6 +21,30 @@ HEADERS = {
 def is_token_configured():
     return AUTH_TOKEN and AUTH_TOKEN != ""
 
+def get_test_auth_token() -> str:
+    """
+    Restituisce un token valido per i test:
+    - Se `TEST_AUTH_TOKEN` è impostato, usa quello
+    - Altrimenti prova a generarne uno tramite `src.auth0.get_auth0_token`
+    Ritorna stringa vuota se non disponibile.
+    """
+    env_token = os.getenv("TEST_AUTH_TOKEN", "")
+    if env_token:
+        return env_token
+
+    try:
+        # Genera token usando la logica applicativa esistente
+        from src.auth0 import get_auth0_token
+        generated = get_auth0_token()
+        print(f"Generated token: {generated}")
+        return generated or ""
+    except Exception as e:
+        # Stampa diagnostica per capire eventuali problemi di import/ambiente
+        import traceback
+        print("get_test_auth_token exception:", repr(e))
+        traceback.print_exc()
+        return ""
+
 def test_stream_query_invalid_token():
     """
     Test E2E: Verifica che /stream_query rifiuti richieste con token non valido.
@@ -49,7 +73,6 @@ def test_stream_query_no_token():
         response = client.post(f"{API_URL}/stream_query", json=payload, headers=headers)
         assert response.status_code == 403
 
-@pytest.mark.skipif(not is_token_configured(), reason="Token di autenticazione non configurato. Esporta un token JWT valido nella variabile d’ambiente TEST_AUTH_TOKEN")
 def test_stream_query_success():
     """
     Test E2E: Verifica che /stream_query risponda correttamente a una richiesta valida (streaming SSE).
@@ -58,14 +81,32 @@ def test_stream_query_success():
         "message": "Ciao chi sei? [Messaggio scritto per testare la risposta]",
         "userid": "google-oauth2|104612087445133776110"
     }
+    token = get_test_auth_token()
+    if not token:
+        pytest.skip("Token di autenticazione non configurato e generazione automatica fallita")
+
     headers = {
-        "Authorization": f"Bearer {AUTH_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "accept": "application/json"
     }
     with httpx.Client(timeout=30) as client:
-        response = client.post(f"{API_URL}/stream_query", json=payload, headers=headers)
-        assert response.status_code == 200
-        # Verifica che arrivi almeno un chunk che inizi con 'data:'
-        chunks = list(response.iter_text())
-        assert any(chunk.strip().startswith("data:") for chunk in chunks)
+        with client.stream("POST", f"{API_URL}/stream_query", json=payload, headers=headers) as r:
+            assert r.status_code == 200
+            lines = list(r.iter_lines())
+            assert any(line.strip().startswith("data:") for line in lines if line)
+
+def test_stream_query_invalid_payload_422():
+    # userid mancante → 422
+    payload = {"message": "Messaggio senza userid"}
+    token = get_test_auth_token()
+    if not token:
+        pytest.skip("Token di autenticazione non configurato e generazione automatica fallita")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    with httpx.Client(timeout=10) as client:
+        r = client.post(f"{API_URL}/stream_query", json=payload, headers=headers)
+        assert r.status_code == 422
