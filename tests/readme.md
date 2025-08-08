@@ -30,7 +30,7 @@ stato: sviluppati
 ---
 
 ## 2. Unit Test
-stato: da sviluppare
+stato: non sviluppati
 
 ### 2.1. `src/rag.py`
 - **ask**
@@ -66,10 +66,7 @@ stato: da sviluppare
 ---
 
 ## 3. Mock e Setup
-- Utilizzare `pytest` e `pytest-mock` per mockare:
-  - Chiamate esterne (Auth0, S3, MongoDB).
-  - Variabili d'ambiente.
-- Utilizzare `testclient` di FastAPI per E2E.
+tbd
 
 ---
 
@@ -100,7 +97,7 @@ pytest  -v -rs tests/
 
 Per eseguire i test:
 
-1. Installa le dipendenze:
+1. Installa le dipendenze (non incluse in requirements.txt):
 
     ```sh
     pip install pytest httpx
@@ -118,7 +115,7 @@ Per eseguire i test:
     export API_URL="http://www.testserver.com/api"
     ```
 
-4. Avvia il backend e lancia:
+4. Avvia il backend e lancia il set di test che vuoi eseguire es:
 
     ```sh
     pytest -v -rs tests/stream_query.py
