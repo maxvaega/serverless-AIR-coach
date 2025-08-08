@@ -30,3 +30,14 @@ def test_update_docs():
         assert isinstance(data["docs_details"], list)
         assert "system_prompt" in data
         assert "prompt_file" in data
+
+def test_update_docs_public():
+    with httpx.Client(timeout=30) as client:
+        response = client.post(f"{API_URL}/update_docs")
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        assert "docs_count" in data
+        assert "docs_details" in data and isinstance(data["docs_details"], list)
+        assert "system_prompt" in data
+        assert "prompt_file" in data
