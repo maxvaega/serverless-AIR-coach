@@ -18,7 +18,7 @@ def format_user_metadata(user_metadata: Dict) -> str:
             if date:
                 formatted_data = f"\nOggi è il {date}\n"
 
-            logger.info("Nessun metadata utente trovato.")
+            logger.info("USER INFO - Nessun metadata utente trovato.")
             return formatted_data
         
         formatted_data = "I dati che l’utente ti ha fornito su di sè sono:\n"
@@ -42,7 +42,7 @@ def format_user_metadata(user_metadata: Dict) -> str:
             if jumps in jumps_mapping:
                 formatted_data += f"Numero di salti: {jumps_mapping[jumps]}\n"
             else:
-                logger.warning(f"User metadata: Numero di salti non riconosciuto: {jumps}")
+                logger.warning(f"USER INFO - Numero di salti non riconosciuto: {jumps}")
         
         # Preferred Dropzone
         preferred_dropzone = user_metadata.get("preferred_dropzone")
@@ -64,7 +64,7 @@ def format_user_metadata(user_metadata: Dict) -> str:
                 if qualifica_formattata:
                     formatted_data += f"{qualifica_formattata}\n"
                 else:
-                    logger.warning(f"User metadata: Qualifica non riconosciuta: {qualifications}")
+                    logger.warning(f"USER INFO - Qualifica non riconosciuta: {qualifications}")
 
         # Name
         name = user_metadata.get("name")
@@ -89,7 +89,7 @@ def format_user_metadata(user_metadata: Dict) -> str:
             if sesso_formattato:
                 formatted_data += f"Sesso: {sesso_formattato}\n"
             else:
-                logger.warning(f"User metadata: Sesso non riconosciuto: {sex}")
+                logger.warning(f"USER INFO - Sesso non riconosciuto: {sex}")
         
 
         date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -98,12 +98,12 @@ def format_user_metadata(user_metadata: Dict) -> str:
 
         name = user_metadata.get("name")
         surname = user_metadata.get("surname")
-        logger.info(f"New user metadata in cache: {name} {surname}\n{formatted_data}")
+        logger.info(f"USER INFO - medatati salvati in cache per: {name} {surname}")
 
         return formatted_data
     
     except Exception as e:
-        logger.error(f"An error occurred while formatting user metadata: {e}")
+        logger.error(f"USER INFO - Errore nel formattare i metadata utente: {e}")
         return
 
 # controlli per autenticazione user_id

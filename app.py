@@ -6,14 +6,9 @@ from src.models import MessageRequest
 from src.rag import ask, update_docs
 from src.s3_utils import create_prompt_file
 from src.env import is_production
-import json
 import uvicorn
 from src.auth import VerifyToken
-
-auth = VerifyToken()
-
 from fastapi import FastAPI, Security
-from src.auth import VerifyToken
 
 auth = VerifyToken()
 
