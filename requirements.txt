@@ -28,7 +28,7 @@ idna==3.10
 jmespath==1.0.1
 jsonpatch==1.33
 jsonpointer==3.0.0
-langchain-core==0.3.35
+
 langchain-google-genai==2.0.9
 langsmith==0.3.8
 orjson==3.10.15
@@ -63,4 +63,3 @@ urllib3==2.3.0
 uvicorn==0.34.0
 zstandard==0.23.0
 langgraph
-langchain==0.3.27

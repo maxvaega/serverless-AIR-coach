@@ -18,9 +18,6 @@ from .tools import test_licenza
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import BaseModel
 
-import langchain
-# from langchain_community.cache import InMemoryCache
-
 
 def build_system_prompt(combined_docs: str) -> str:
     """

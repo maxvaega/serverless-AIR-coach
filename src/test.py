@@ -1,5 +1,4 @@
 from .rag import ask
-import asyncio
 
 def main():
     query = input("Enter the query: ").strip("'", )

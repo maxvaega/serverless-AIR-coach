@@ -1,7 +1,6 @@
 import random
 from typing import Optional
 from langchain_core.tools import tool
-# from .utils import get_combined_docs
 from .logging_config import logger
 
 # Nomi ufficiali dei capitoli disponibili
