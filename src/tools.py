@@ -1,108 +1,147 @@
 import random
+from typing import Optional
 from langchain_core.tools import tool
-from .utils import get_combined_docs
+# from .utils import get_combined_docs
+from .logging_config import logger
 
-# Mock database of questions
+# Nomi ufficiali dei capitoli disponibili
+CHAPTER_NAMES = {
+    1: "Meteorologia applicata al paracadutismo",
+    2: "Aerodinamica applicata al corpo in caduta libera",
+    3: "Tecnologia degli equipaggiamenti e strumenti in uso",
+    4: "Tecnica di direzione di lancio",
+    5: "Tecnica di utilizzo dei paracadute plananti",
+    6: "Elementi e procedure generali di sicurezza",
+    7: "Elementi e procedure di sicurezza nel lavoro relativo in caduta libera",
+    8: "Elementi e procedure di sicurezza nel volo in formazione con paracadute planante",
+    9: "Procedure in situazioni di emergenza",
+    10: "Normativa aeronautica attinente il paracadutismo",
+}
+# Mock database of questions (struttura piatta per facilità di lettura da parte dell'LLM)
 mock_db = [
     {
-        "_id": {"$oid": "6877bd505a3058d299a4b0df"},
-        "capitolo": {"numero": {"$numberInt": "1"}, "nome": "Meteorologia applicata al paracadutismo"},
-        "domanda": {
-            "numero": {"$numberInt": "1"},
-            "testo": "UNA ZONA CON PRESSIONE ATMOSFERICA DI 1030 HPA È CARATTERIZZATA DA:",
-            "opzioni": [
-                {"id": "A", "testo": "Maltempo"},
-                {"id": "B", "testo": "Vento forte"},
-                {"id": "C", "testo": "Bel tempo"},
-                {"id": "D", "testo": "Temporali"}
-            ],
-            "risposta_corretta": "C"
-        }
+        "capitolo": 1,
+        "capitolo_nome": CHAPTER_NAMES[1],
+        "numero": 1,
+        "testo": "UNA ZONA CON PRESSIONE ATMOSFERICA DI 1030 HPA È CARATTERIZZATA DA:",
+        "opzioni": [
+            {"id": "A", "testo": "Maltempo"},
+            {"id": "B", "testo": "Vento forte"},
+            {"id": "C", "testo": "Bel tempo"},
+            {"id": "D", "testo": "Temporali"}
+        ],
+        "risposta_corretta": "C",
     },
     {
-        "_id": {"$oid": "6877bd505a3058d299a4b0e0"},
-        "capitolo": {"numero": {"$numberInt": "1"}, "nome": "Meteorologia applicata al paracadutismo"},
-        "domanda": {
-            "numero": {"$numberInt": "2"},
-            "testo": "UNA ZONA DI BASSA PRESSIONE È CARATTERIZZATA DA:",
-            "opzioni": [
-                {"id": "A", "testo": "In generale cattive condizioni meteorologiche"},
-                {"id": "B", "testo": "Nubi basse ed elevata pressione"},
-                {"id": "C", "testo": "In generale buone condizioni meteorologiche"},
-                {"id": "D", "testo": "Vento che soffia in senso orario"}
-            ],
-            "risposta_corretta": "A"
-        }
+        "capitolo": 1,
+        "capitolo_nome": CHAPTER_NAMES[1],
+        "numero": 2,
+        "testo": "UNA ZONA DI BASSA PRESSIONE È CARATTERIZZATA DA:",
+        "opzioni": [
+            {"id": "A", "testo": "In generale cattive condizioni meteorologiche"},
+            {"id": "B", "testo": "Nubi basse ed elevata pressione"},
+            {"id": "C", "testo": "In generale buone condizioni meteorologiche"},
+            {"id": "D", "testo": "Vento che soffia in senso orario"}
+        ],
+        "risposta_corretta": "A",
     },
     {
-        "_id": {"$oid": "6877be6b5a3058d299a4b13f"},
-        "capitolo": {"numero": {"$numberInt": "2"}, "nome": "Aerodinamica applicata al corpo in caduta libera"},
-        "domanda": {
-            "numero": {"$numberInt": "13"},
-            "testo": "QUAL È LA VELOCITÀ TERMINALE MEDIA, A 2.000 M DI QUOTA, DI UN PARACADUTISTA IN BOX POSITION (PIATTO), USCITO DALL'AEREO A 4000 M?",
-            "opzioni": [
-                {"id": "A", "testo": "Circa 30 m/s"},
-                {"id": "B", "testo": "Circa 50 m/s"},
-                {"id": "C", "testo": "Circa 75 m/s"},
-                {"id": "D", "testo": "Circa 100 m/s"}
-            ],
-            "risposta_corretta": "B"
-        }
+        "capitolo": 2,
+        "capitolo_nome": CHAPTER_NAMES[2],
+        "numero": 13,
+        "testo": "QUAL È LA VELOCITÀ TERMINALE MEDIA, A 2.000 M DI QUOTA, DI UN PARACADUTISTA IN BOX POSITION (PIATTO), USCITO DALL'AEREO A 4000 M?",
+        "opzioni": [
+            {"id": "A", "testo": "Circa 30 m/s"},
+            {"id": "B", "testo": "Circa 50 m/s"},
+            {"id": "C", "testo": "Circa 75 m/s"},
+            {"id": "D", "testo": "Circa 100 m/s"}
+        ],
+        "risposta_corretta": "B",
     },
     {
-        "_id": {"$oid": "6877be6b5a3058d299a4b140"},
-        "capitolo": {"numero": {"$numberInt": "2"}, "nome": "Aerodinamica applicata al corpo in caduta libera"},
-        "domanda": {
-            "numero": {"$numberInt": "14"},
-            "testo": "UNA POSIZIONE \"INCASSATA\" PERMETTE AD UN PARACADUTISTA DI DIMINUIRE LA PROPRIA VELOCITÀ IN CADUTA LIBERA, PERCHÉ:",
-            "opzioni": [
-                {"id": "A", "testo": "Aumenta la resistenza aerodinamica, modificando la forma e la superficie del proprio corpo"},
-                {"id": "B", "testo": "Il suo baricentro è posto più in alto"},
-                {"id": "C", "testo": "La forza di gravità aumenta"},
-                {"id": "D", "testo": "Spinge sull'aria con maggior forza"}
-            ],
-            "risposta_corretta": "A"
-        }
-    }
+        "capitolo": 2,
+        "capitolo_nome": CHAPTER_NAMES[2],
+        "numero": 14,
+        "testo": "UNA POSIZIONE \"INCASSATA\" PERMETTE AD UN PARACADUTISTA DI DIMINUIRE LA PROPRIA VELOCITÀ IN CADUTA LIBERA, PERCHÉ:",
+        "opzioni": [
+            {"id": "A", "testo": "Aumenta la resistenza aerodinamica, modificando la forma e la superficie del proprio corpo"},
+            {"id": "B", "testo": "Il suo baricentro è posto più in alto"},
+            {"id": "C", "testo": "La forza di gravità aumenta"},
+            {"id": "D", "testo": "Spinge sull'aria con maggior forza"}
+        ],
+        "risposta_corretta": "A",
+    },
 ]
 
 @tool
-def test_licenza(capitoli: list[int] = None) -> dict:
+def test_licenza(capitolo: Optional[int] = None) -> dict:
     """
-    Estrae delle domande per l'esame teorico della licenza di paracadutismo.
-    Restituisce una domanda casuale per ognuno dei capitoli richiesti.
-    Se nessun capitolo è specificato, restituisce una domanda casuale per ogni capitolo disponibile.
-    """
-    questions = {}
+    Scopo:
+        Recupera una domanda d'esame casuale per i capitoli di teoria della licenza di paracadutismo.
 
-    # Group questions by chapter number
-    chapters = {}
+    Quando usarlo:
+        Usare SEMPRE questo tool quando l'utente chiede di fare/simulare/ripassare il quiz teorico
+        o chiede domande a scelta multipla su uno o più capitoli.
+
+    Input:
+        capitolo: intero opzionale (1-10).
+                  - Se valorizzato: restituisce una domanda casuale dal capitolo indicato.
+                  - Se None: restituisce una domanda casuale da tutto il DB mockato.
+
+    Output (schema atteso):
+        Un singolo dict con i seguenti campi (struttura piatta):
+        - 'capitolo': numero del capitolo
+        - 'capitolo_nome': nome del capitolo
+        - 'numero': numero della domanda
+        - 'testo': testo della domanda
+        - 'opzioni': lista di dict con i campi 'id' e 'testo' per ogni opzione
+        - 'risposta_corretta': lettera dell'opzione corretta
+
+    Note:
+        - Il modello NON deve modificare testo o opzioni. Deve limitarsi a presentare fedelmente in linguaggio naturale i contenuti restituiti.
+    """
+
+    #   - Nota: poiché il DB mock contiene solo i capitoli 1 e 2, se viene richiesto
+    #     un capitolo > 2, il tool utilizza il capitolo 2.
+    # Raggruppa le domande per capitolo nel mock DB piatto
+    chapters: dict[int, list[dict]] = {}
     for item in mock_db:
-        chapter_num_str = item["capitolo"]["numero"]["$numberInt"]
-        chapter_num = int(chapter_num_str)
+        chapter_num = int(item["capitolo"])  # già int
         if chapter_num not in chapters:
             chapters[chapter_num] = []
         chapters[chapter_num].append(item)
 
-    target_chapters = capitoli if capitoli else chapters.keys()
+    if capitolo is not None:
+        # Normalizza il capitolo richiesto: se >2 (DB mock), usa 2
+        effective_chapter = 2 if capitolo > 2 else capitolo
+        # Se per qualche motivo il capitolo non esiste nel mock, fallback all'intero DB
+        if effective_chapter in chapters and chapters[effective_chapter]:
+            random_question = random.choice(chapters[effective_chapter])
+        else:
+            random_question = random.choice(mock_db)
+    else:
+        # Da tutto il DB mockato
+        random_question = random.choice(mock_db)
 
-    for chapter_num in target_chapters:
-        if chapter_num in chapters:
-            # Select a random question from the chapter
-            random_question = random.choice(chapters[chapter_num])
-            questions[f"capitolo_{chapter_num}"] = random_question
+    # Restituisce l'intera domanda in formato piatto
+    logger.info(
+        "TOOL: Test licenza - Capitolo richiesto=%s, usato=%s, Domanda n.=%s:\n\n%s\n",
+        str(capitolo),
+        str(random_question.get("capitolo")),
+        str(random_question.get("numero")),
+        str(random_question),
+    )
+    return random_question
 
-    return questions
-
-@tool
-def reperire_documentazione_air_coach(query: str) -> str:
-    """
-    Questo tool serve a rispondere a domande di carattere generale sull'attività di AIR Coach,
-    sui corsi, sul paracadutismo e argomenti correlati.
-    Utilizza la documentazione ufficiale per fornire risposte accurate.
-    Da usare per tutte le domande che non riguardano la simulazione d'esame.
-    """
-    # This tool wraps the existing RAG functionality.
-    # The 'query' parameter is implicitly used by the chain, but the main purpose
-    # is to retrieve the context documents.
-    return get_combined_docs()
+# @tool
+# def reperire_documentazione_air_coach(query: str) -> str:
+#     """
+#     Questo tool serve a rispondere a domande di carattere generale sull'attività di AIR Coach,
+#     sui corsi, sul paracadutismo e argomenti correlati.
+#     Utilizza la documentazione ufficiale per fornire risposte accurate.
+#     Da usare per tutte le domande che non riguardano la simulazione d'esame.
+#     """
+#     # This tool wraps the existing RAG functionality.
+#     # The 'query' parameter is implicitly used by the chain, but the main purpose
+#     # is to retrieve the context documents.
+#     return get_combined_docs()

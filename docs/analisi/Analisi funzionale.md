@@ -2,7 +2,11 @@
 
 ## Panoramica Generale
 
-AIR Coach API è un'applicazione basata su FastAPI progettata per gestire interazioni con un chatbot intelligente. L'applicazione utilizza il modello Gemini 2.0 Flash di Google per generare risposte alle query degli utenti, con la capacità di caricare dinamicamente il contesto da file Markdown archiviati in AWS S3.
+AIR Coach API è un'applicazione basata su FastAPI progettata per gestire interazioni con un chatbot intelligente. L'applicazione utilizza un agente LangGraph prebuilt (ReAct) con modello Gemini 2.0 di Google per generare risposte, con capacità di:
+- caricare dinamicamente il contesto da file Markdown su AWS S3 (system prompt)
+- invocare tool applicativi
+- gestire memoria a breve termine tramite `InMemorySaver` (volatile, per istanza)
+- ibridare la memoria con la cronologia persistita su MongoDB (fallback serverless)
 
 ## Struttura del Progetto
 
@@ -26,13 +30,15 @@ L'applicazione carica dinamicamente il contesto per il modello LLM da file Markd
 - Caching: Il contenuto combinato viene memorizzato in cache per migliorare le prestazioni
 - Aggiornamento manuale: Un endpoint dedicato permette di forzare l’aggiornamento della cache
 
-### 2. Interazione con il Modello LLM
+### 2. Interazione con LangGraph (LLM + Tool + Memoria)
 
-L’applicazione utilizza il modello Gemini 2.0 Flash di Google per generare risposte:
-
-- Prompt di sistema: Costruito utilizzando il contenuto combinato dei documenti
-- Cronologia delle chat: Per lo streaming è sempre attiva (ultimi 10 messaggi)
-- Streaming: Supporta risposte in streaming asincrone
+- Agente: `create_react_agent` con `prompt=system_prompt` e `tools=[test_licenza]`.
+- Memoria (serverless‑friendly):
+  - Volatile: `InMemorySaver` (presente finché l’istanza è “calda”).
+  - Persistita: MongoDB (cronologia utente). Se la memoria volatile è assente, la cronologia viene letta da DB e “seedata” nella memoria volatile del thread.
+- `thread_id`: per utente (passato via `config`), un thread per utente.
+- Streaming: risposte in streaming asincrone (SSE).
+- Tool: il risultato dei tool viene reso disponibile al modello all’interno del turno corrente e salvato su DB al termine.
 
 ## Endpoint API
 
@@ -43,6 +49,7 @@ L’applicazione utilizza il modello Gemini 2.0 Flash di Google per generare ris
   - message: Il testo della query
   - userid: L’ID dell’utente
 - Autenticazione: Richiede Bearer JWT (Auth0)
+ - Persistenza: al termine del turno salva su MongoDB la tripletta `human`/`system`/`tool` (se presente). Il campo `tool` include nome tool e risultato.
 
 ### 2. /api/update_docs
 - Metodo: POST
@@ -79,15 +86,16 @@ Fare riferimento esclusivamente al file `.env.example` per l’elenco completo d
 - Gestione delle eccezioni: Implementata negli endpoint
 - Logging: Sistema di logging configurato per monitorare l’applicazione
 
-## Flusso di Elaborazione delle Query
+## Flusso di Elaborazione delle Query (streaming)
 
-- L’utente invia una query tramite /api/stream_query
-- L’applicazione carica il contesto dai documenti S3 (se non già in cache)
-- Recupera la cronologia delle chat (sempre attiva per lo stream, ultimi 10 messaggi)
-- Costruisce un prompt di sistema utilizzando il contesto e la cronologia
-- Invia il prompt al modello Gemini 2.0 Flash
-- Riceve e restituisce la risposta in streaming
-- Salva la conversazione in MongoDB
+- L’utente invia una query a `/api/stream_query` (JWT richiesto).
+- L’agente LangGraph è inizializzato con `prompt` dai documenti S3.
+- Memoria ibrida:
+  - Si tenta di leggere la memoria volatile del thread (InMemorySaver) tramite `thread_id=userid`.
+  - Se vuota (es. cold start serverless), si ricostruisce la cronologia dagli ultimi messaggi in MongoDB, inclusi eventuali risultati `tool`, e la si inserisce nella memoria volatile.
+- L’invocazione del turno passa solo il messaggio corrente; la memoria del thread fornisce lo storico.
+- L’agente può decidere di usare i tool e produce la risposta in streaming.
+- A fine turno, si salva su MongoDB la tripletta `human`/`system`/`tool`.
 
 ## Conclusioni
 

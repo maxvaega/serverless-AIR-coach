@@ -8,10 +8,14 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
 
 1. Autenticazione: L'endpoint `/api/stream_query` richiede autenticazione JWT tramite Auth0, validata dalla classe `VerifyToken` (src/auth.py).
 2. Ricezione Richiesta: Il payload deve essere conforme al modello `MessageRequest` (src/models.py).
-3. Costruzione Prompt: Il system prompt viene costruito combinando i file Markdown dal bucket S3 (src/rag.py), con eventuali metadati utente recuperati da Auth0 e formattati.
-4. Gestione Chat History: Per lo streaming la cronologia è sempre attiva; vengono recuperati gli ultimi 10 messaggi dalla collezione MongoDB e aggiunti al contesto.
-5. Chiamata LLM: Il prompt viene inviato al modello Gemini 2.0 Flash tramite langchain_google_genai. Se `stream=True`, la risposta viene inviata come stream SSE.
-6. Persistenza: Al termine dello streaming, domanda e risposta vengono salvate su MongoDB.
+3. Agente LangGraph: l’agente è costruito con `create_react_agent(model, tools, prompt=system_prompt, checkpointer=InMemorySaver())`.
+4. Gestione Memoria Ibrida:
+   - Si prepara `config={"configurable": {"thread_id": userid}}`.
+   - Si legge lo stato del thread: se la memoria volatile contiene `messages`, la si usa direttamente.
+   - Se è vuota, si preleva la storia da MongoDB (ultimi N turni), si ricostruiscono `HumanMessage`/`AIMessage` e, se presenti, i risultati tool storici come contesto, poi si effettua `update_state(config, {"messages": seed_messages})`.
+5. Invocazione in streaming: si invia solo il messaggio corrente (`{"messages": [HumanMessage(query)]}`), affidando lo storico al checkpointer.
+6. Cattura tool: alla fine del run, dai `messages` di output si estraggono i `ToolMessage` prodotti in questo turno.
+7. Persistenza: su MongoDB si salva la tripletta `human`/`system`/`tool` (se presente), insieme a `userId` e `timestamp`.
 
 ## Relazioni tra i File
 
@@ -69,7 +73,9 @@ app.py
 - Token Auth0 gestito e cacheato per ridurre chiamate ripetute.
 
 ### Persistenza Chat
-- Salvataggio e recupero conversazioni su MongoDB (`insert_data`, `get_data`).
+- Short-term: `InMemorySaver` (per istanza, volatile) con `thread_id`.
+- Long-term: MongoDB, con lettura/ricostruzione storia alla cold start serverless.
+- Schema documento: `human` (domanda), `system` (risposta), `tool` (opzionale: dict o lista con `name` e `result`), `userId`, `timestamp`.
 
 ## Analisi dei Moduli/File
 
@@ -82,7 +88,8 @@ app.py
 
 ### src/rag.py
 - Gestione system prompt e documenti S3 (fetch, cache, update).
-- Funzione principale `ask`: costruisce contesto, invoca LLM, gestisce streaming e persistenza.
+- Agente LangGraph prebuilt con `prompt` e `InMemorySaver`.
+- Funzione `ask`: memoria ibrida (checkpointer + Mongo fallback), streaming SSE, estrazione `ToolMessage`, persistenza tripletta `human/system/tool`.
 - `create_prompt_file`: salva system prompt su S3.
 
 ### src/auth.py

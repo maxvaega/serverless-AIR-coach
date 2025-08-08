@@ -8,12 +8,13 @@ Questo documento descrive la suite di test end-to-end (E2E) pensata per essere e
 stato: sviluppati
 
 ### 1.1. `/api/stream_query`
-- Obiettivo: verificare che l'endpoint risponda correttamente a una richiesta autenticata e restituisca uno stream SSE valido.
+- Obiettivo: verificare che l'endpoint risponda correttamente a una richiesta autenticata, restituisca stream SSE valido e persista correttamente gli output dei tool.
 - Test implementati:
   - Richiesta con token non valido → 401/403
   - Richiesta senza token → 403
   - Richiesta valida → 200 e presenza di linee SSE che iniziano con `data:`
   - Payload non valido → 422 (es. `userid` mancante) [richiede token valido]
+  - Richiesta che triggera un tool → viene salvato in MongoDB il campo `tool` con `name` e `result`
 - Dati:
   - `TEST_AUTH_TOKEN`: facoltativo. Se non impostato, i test che richiedono un token valido proveranno a generarlo automaticamente tramite `src.auth0.get_auth0_token()` (client credentials)
   - `userid`: parametrizzato (es. un `google-oauth2|...`)
