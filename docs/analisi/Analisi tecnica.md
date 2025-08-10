@@ -8,7 +8,7 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
 
 1. Autenticazione: L'endpoint `/api/stream_query` richiede autenticazione JWT tramite Auth0, validata dalla classe `VerifyToken` (src/auth.py).
 2. Ricezione Richiesta: Il payload deve essere conforme al modello `MessageRequest` (src/models.py).
-3. Agente LangGraph: l’agente è costruito con `create_react_agent(model, tools, prompt=system_prompt, checkpointer=InMemorySaver())`.
+3. Agente LangGraph: l’agente è costruito per-request con `create_react_agent(model, tools, prompt=system_prompt, checkpointer=InMemorySaver())` per evitare riuso di oggetti legati all'event loop in ambienti serverless.
 4. Gestione Memoria Ibrida:
    - Si prepara `config={"configurable": {"thread_id": userid}}`.
    - Si legge lo stato del thread: se la memoria volatile contiene `messages`, la si usa direttamente.
@@ -88,8 +88,8 @@ app.py
 
 ### src/rag.py
 - Gestione system prompt e documenti S3 (fetch, cache, update).
-- Agente LangGraph prebuilt con `prompt` e `InMemorySaver`.
-- Funzione `ask`: memoria ibrida (checkpointer + Mongo fallback), streaming SSE, estrazione `ToolMessage`, persistenza tripletta `human/system/tool`.
+- Agente LangGraph creato per-request con `prompt` e `InMemorySaver` per evitare problemi di event loop chiuso su serverless.
+- Funzione `ask`: memoria ibrida (checkpointer volatile per thread + seed da MongoDB alla cold start), streaming SSE, estrazione `ToolMessage`, persistenza tripletta `human/system/tool`.
 - `create_prompt_file`: salva system prompt su S3.
 
 ### src/auth.py
@@ -133,6 +133,16 @@ Per le variabili di ambiente, fare interamente riferimento al file `.env.example
 - **Estendibilità**: Modularità elevata, facile aggiungere endpoint o provider LLM.
 - **Persistenza**: Tutte le interazioni vengono salvate su MongoDB.
 - **Prompt Dinamico**: Il system prompt può essere aggiornato senza riavviare il servizio, aggiornando i file su S3 e chiamando `/api/update_docs`.
+
+## Gestione Event Loop in Ambiente Serverless
+
+- Problema riscontrato: alla seconda richiesta consecutiva si verificava `Event loop is closed` durante lo streaming.
+- Soluzione adottata:
+  - Inizializzazione lazy di `combined_docs` e `system_prompt` (no oggetti async all'import).
+  - Creazione dell'agente per-request: nuova istanza di modello, checkpointer `InMemorySaver` e `create_react_agent(...)` dentro `ask()`.
+  - Memoria: se lo stato volatile del thread è vuoto, si esegue il seed dei `messages` da MongoDB e si aggiorna lo stato con `update_state(config, {...})`.
+  - Gestione errori: intercettato `RuntimeError` nello streaming per segnalare chiaramente la condizione di event loop non disponibile.
+
 
 ## Riferimenti ai file principali
 

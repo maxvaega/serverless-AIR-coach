@@ -1,6 +1,7 @@
 import datetime
 import json
 from typing import AsyncGenerator, Optional, Union
+import asyncio
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, ToolMessage
@@ -23,9 +24,9 @@ HISTORY_LIMIT = 10
 
 combined_docs: str = ""
 system_prompt: str = ""
-llm: Optional[ChatGoogleGenerativeAI] = None
-checkpointer: Optional[InMemorySaver] = None
-agent_executor = None  # tipo dinamico restituito da create_react_agent
+llm: Optional[ChatGoogleGenerativeAI] = None  # non usare a livello globale in serverless
+checkpointer: Optional[InMemorySaver] = None  # non usare a livello globale in serverless
+agent_executor = None  # non usare a livello globale in serverless
 
 
 # ------------------------------------------------------------------------------
@@ -58,49 +59,23 @@ def _extract_text(content) -> str:
     return ""
 
 
-def initialize_agent(force: bool = False) -> None:
+def initialize_agent_state(force: bool = False) -> None:
     """
-    Inizializza prompt, LLM e agente. Se force=False, evita re-inizializzazioni inutili.
+    Inizializza solo i documenti e il system_prompt. L'agente/LLM vengono
+    creati per-request per evitare problemi di event loop in ambiente serverless.
     """
-    global combined_docs, system_prompt, llm, checkpointer, agent_executor
-
-    if not force and agent_executor is not None:
-        return
+    global combined_docs, system_prompt
 
     try:
-        # Reperisce/aggiorna i documenti solo se mancanti o in forzatura
-        if force or not combined_docs:
+        if force or not combined_docs or not system_prompt:
             combined_docs = get_combined_docs()
             system_prompt = build_system_prompt(combined_docs)
-
-        # Definisce LLM
-        model = FORCED_MODEL
-        logger.info(f"Selected LLM model: {model}")
-        llm = ChatGoogleGenerativeAI(
-            model=model,
-            temperature=0.7,
-        )
-
-        # Definisce tool e agente con memoria volatile
-        tools = [test_licenza]
-        checkpointer = InMemorySaver()
-        agent_executor = create_react_agent(
-            llm,
-            tools,
-            prompt=system_prompt,
-            checkpointer=checkpointer,
-        )
-        logger.info("Agent initialized successfully.")
     except Exception as e:
-        # Non sollevare in import time; lascia che ask() gestisca eventuali retry/logica
-        logger.error(f"Errore durante l'inizializzazione dell'agente: {e}")
+        logger.error(f"Errore durante l'inizializzazione dello stato agente: {e}")
 
 
-# Tentativo di inizializzazione eager all'import (rispetta il caricamento iniziale documentato)
-try:
-    initialize_agent()
-except Exception as e:
-    logger.error(f"Initial agent initialization failed: {e}")
+# Evita inizializzazione eager di oggetti legati all'event loop in ambiente serverless.
+# Inizializza solo il prompt/documenti al primo utilizzo.
 
 
 # ------------------------------------------------------------------------------
@@ -135,11 +110,24 @@ def ask(
     L'agente può usare tool. La memoria usa il checkpointer se presente, altrimenti si ricostruisce da MongoDB.
     Se richiesto, i metadata profilo utente vengono recuperati da Auth0.
     """
-    global agent_executor
+    # Inizializza prompt/documenti (lazy)
+    initialize_agent_state()
 
-    # Garantisce che l'agente sia disponibile
-    if agent_executor is None:
-        initialize_agent()
+    # Costruisce agent per-request per evitare problemi di event loop chiuso
+    model = FORCED_MODEL
+    logger.info(f"Selected LLM model: {model}")
+    local_llm = ChatGoogleGenerativeAI(
+        model=model,
+        temperature=0.7,
+    )
+    tools = [test_licenza]
+    local_checkpointer = InMemorySaver()
+    agent_executor = create_react_agent(
+        local_llm,
+        tools,
+        prompt=system_prompt,
+        checkpointer=local_checkpointer,
+    )
 
     # Branch non-stream (sync)
     if not stream:
@@ -313,6 +301,10 @@ def ask(
                                     response_chunks.append(content_text)
                                     yield f"data: {json.dumps({'data': content_text})}\n\n"
 
+            except RuntimeError as e:
+                # Tipico in serverless: event loop chiuso tra richieste
+                logger.error(f"Streaming RuntimeError: {e}")
+                yield f"data: {{'error': 'Errore nello streaming della risposta dell\\'agente: Event loop non disponibile'}}\n\n"
             except Exception as e:
                 logger.error(f"Errore nello streaming della risposta dell'agente: {e}")
                 yield f"data: {{'error': 'Errore nello streaming della risposta dell\\'agente: {str(e)}'}}\n\n"
