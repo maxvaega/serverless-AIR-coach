@@ -24,10 +24,10 @@ mock_db = [
         "numero": 1,
         "testo": "UNA ZONA CON PRESSIONE ATMOSFERICA DI 1030 HPA È CARATTERIZZATA DA:",
         "opzioni": [
-            {"id": "A", "testo": "Maltempo"},
-            {"id": "B", "testo": "Vento forte"},
-            {"id": "C", "testo": "Bel tempo"},
-            {"id": "D", "testo": "Temporali"}
+            {"id": "A)", "testo": "Maltempo"},
+            {"id": "B)", "testo": "Vento forte"},
+            {"id": "C)", "testo": "Bel tempo"},
+            {"id": "D)", "testo": "Temporali"}
         ],
         "risposta_corretta": "C",
     },
@@ -37,10 +37,10 @@ mock_db = [
         "numero": 2,
         "testo": "UNA ZONA DI BASSA PRESSIONE È CARATTERIZZATA DA:",
         "opzioni": [
-            {"id": "A", "testo": "In generale cattive condizioni meteorologiche"},
-            {"id": "B", "testo": "Nubi basse ed elevata pressione"},
-            {"id": "C", "testo": "In generale buone condizioni meteorologiche"},
-            {"id": "D", "testo": "Vento che soffia in senso orario"}
+            {"id": "A)", "testo": "In generale cattive condizioni meteorologiche"},
+            {"id": "B)", "testo": "Nubi basse ed elevata pressione"},
+            {"id": "C)", "testo": "In generale buone condizioni meteorologiche"},
+            {"id": "D)", "testo": "Vento che soffia in senso orario"}
         ],
         "risposta_corretta": "A",
     },
@@ -50,10 +50,10 @@ mock_db = [
         "numero": 13,
         "testo": "QUAL È LA VELOCITÀ TERMINALE MEDIA, A 2.000 M DI QUOTA, DI UN PARACADUTISTA IN BOX POSITION (PIATTO), USCITO DALL'AEREO A 4000 M?",
         "opzioni": [
-            {"id": "A", "testo": "Circa 30 m/s"},
-            {"id": "B", "testo": "Circa 50 m/s"},
-            {"id": "C", "testo": "Circa 75 m/s"},
-            {"id": "D", "testo": "Circa 100 m/s"}
+            {"id": "A)", "testo": "Circa 30 m/s"},
+            {"id": "B)", "testo": "Circa 50 m/s"},
+            {"id": "C)", "testo": "Circa 75 m/s"},
+            {"id": "D)", "testo": "Circa 100 m/s"}
         ],
         "risposta_corretta": "B",
     },
@@ -63,10 +63,10 @@ mock_db = [
         "numero": 14,
         "testo": "UNA POSIZIONE \"INCASSATA\" PERMETTE AD UN PARACADUTISTA DI DIMINUIRE LA PROPRIA VELOCITÀ IN CADUTA LIBERA, PERCHÉ:",
         "opzioni": [
-            {"id": "A", "testo": "Aumenta la resistenza aerodinamica, modificando la forma e la superficie del proprio corpo"},
-            {"id": "B", "testo": "Il suo baricentro è posto più in alto"},
-            {"id": "C", "testo": "La forza di gravità aumenta"},
-            {"id": "D", "testo": "Spinge sull'aria con maggior forza"}
+            {"id": "A)", "testo": "Aumenta la resistenza aerodinamica, modificando la forma e la superficie del proprio corpo"},
+            {"id": "B)", "testo": "Il suo baricentro è posto più in alto"},
+            {"id": "C)", "testo": "La forza di gravità aumenta"},
+            {"id": "D)", "testo": "Spinge sull'aria con maggior forza"}
         ],
         "risposta_corretta": "A",
     },
