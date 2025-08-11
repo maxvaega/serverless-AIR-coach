@@ -2,6 +2,7 @@ import datetime
 import json
 from typing import AsyncGenerator, Optional, Union
 import asyncio
+import time
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, ToolMessage
@@ -21,6 +22,7 @@ from .logging_config import logger
 # Costanti e stato di modulo
 # ------------------------------------------------------------------------------
 HISTORY_LIMIT = 10
+LOG_MAX_TEXT_CHARS = 200
 
 combined_docs: str = ""
 system_prompt: str = ""
@@ -58,6 +60,89 @@ def _extract_text(content) -> str:
     except Exception:
         pass
     return ""
+
+
+def _truncate_for_log(text: Optional[str], max_chars: int = LOG_MAX_TEXT_CHARS) -> str:
+    if not text:
+        return ""
+    return text if len(text) <= max_chars else text[:max_chars] + "..."
+
+
+def create_agent_instance() -> object:
+    """
+    Crea un agente per-request usando il checkpointer condiviso a livello di processo.
+    """
+    model = FORCED_MODEL
+    logger.info(f"Selected LLM model: {model}")
+    local_llm = ChatGoogleGenerativeAI(
+        model=model,
+        temperature=0.7,
+    )
+    tools = [test_licenza]
+    local_checkpointer = _get_checkpointer()
+    return create_react_agent(
+        local_llm,
+        tools,
+        prompt=system_prompt,
+        checkpointer=local_checkpointer,
+    )
+
+
+def prepare_seed_messages(
+    user_id: str,
+    chat_history: bool,
+    user_data: bool,
+    token: Optional[str],
+) -> list:
+    seed_messages = []
+    # Cold start: inject user info in volatile memory
+    if user_data:
+        try:
+            ui = get_cached_user_data(user_id)
+            if not ui:
+                user_metadata = get_user_metadata(user_id, token=token)
+                ui = format_user_metadata(user_metadata)
+                if ui:
+                    set_cached_user_data(user_id, ui)
+            if ui:
+                seed_messages.append(AIMessage(ui))
+                logger.info("HISTORY / USER DATA - User info inserito nella memoria volatile del thread (cold start)")
+        except Exception as e:
+            logger.error(f"Errore nel recuperare i dati utente per cold start: {e}")
+
+    # Seed da DB se richiesto
+    if chat_history:
+        try:
+            history = get_data(
+                DATABASE_NAME,
+                COLLECTION_NAME,
+                filters={"userId": user_id},
+                limit=HISTORY_LIMIT,
+            )
+            added = 0
+            for msg in history:
+                if msg.get("human"):
+                    seed_messages.append(HumanMessage(msg["human"]))
+                    added += 1
+                tool_entry = msg.get("tool")
+                if tool_entry:
+                    try:
+                        tool_name = tool_entry.get("name") if isinstance(tool_entry, dict) else None
+                        tool_payload = tool_entry.get("result") if isinstance(tool_entry, dict) else tool_entry
+                        tool_text = json.dumps(tool_payload) if not isinstance(tool_payload, str) else tool_payload
+                        seed_messages.append(AIMessage(f"previous tool [{tool_name}] result : \n{_truncate_for_log(tool_text)}"))
+                        added += 1
+                    except Exception:
+                        pass
+                if msg.get("system"):
+                    seed_messages.append(AIMessage(msg["system"]))
+                    added += 1
+            if history:
+                logger.info(f"HISTORY - Cronologia recuperata da DB: {len(history)} messaggi, seed aggiunti: {added}")
+        except Exception as e:
+            logger.error(f"Errore nel recuperare la chat history: {e}")
+
+    return seed_messages
 
 
 def initialize_agent_state(force: bool = False) -> None:
@@ -125,25 +210,13 @@ def ask(
     # Inizializza prompt/documenti (lazy)
     initialize_agent_state()
 
-    # Costruisce agent per-request per evitare problemi di event loop chiuso
-    model = FORCED_MODEL
-    logger.info(f"Selected LLM model: {model}")
-    local_llm = ChatGoogleGenerativeAI(
-        model=model,
-        temperature=0.7,
-    )
-    tools = [test_licenza]
-    local_checkpointer = _get_checkpointer()
-    agent_executor = create_react_agent(
-        local_llm,
-        tools,
-        prompt=system_prompt,
-        checkpointer=local_checkpointer,
-    )
+    # Crea agente per-request
+    agent_executor = create_agent_instance()
 
     # Branch non-stream (sync)
     if not stream:
         try:
+            t0 = time.perf_counter()
             messages = []
             user_info = None
 
@@ -156,7 +229,7 @@ def ask(
                         set_cached_user_data(user_id, user_info)
                     if user_info:
                         messages.append(AIMessage(user_info))
-                        logger.info(f"User info aggiunto ai messaggi: {user_info}")
+                        logger.info("User info aggiunto ai messaggi (troncato)")
                 except Exception as e:
                     logger.error(f"Errore nel recuperare i dati dell'utente per l'ID {user_id}: {e}")
                     return f"data: {{'error': 'Errore nel recuperare i dati dell\\'utente: {str(e)}'}}\n\n"
@@ -168,7 +241,7 @@ def ask(
                     for msg in history:
                         messages.append(HumanMessage(msg.get("human", "")))
                         messages.append(AIMessage(msg.get("system", "")))
-                        logger.info(f"Chat history: {msg.get('human')} \n-> \n{msg.get('system')}")
+                        pass  # Evita log verbosi di contenuti interi
             except Exception as e:
                 logger.error(f"HISTORY - Errore nel recuperare la chat history: {e}")
                 return f"data: {{'error': 'Errore nel recuperare la chat history: {str(e)}'}}\n\n"
@@ -180,6 +253,8 @@ def ask(
             try:
                 result = agent_executor.invoke({"messages": messages})
                 final_response = result["messages"][-1].content
+                duration_ms = int((time.perf_counter() - t0) * 1000)
+                logger.info(f"ASK SYNC - done in {duration_ms} ms; response_len={len(final_response) if isinstance(final_response, str) else 'n/a'}")
                 return final_response
             except Exception as e:
                 logger.error(f"Errore nell'invocare l'agente: {e}")
@@ -194,9 +269,11 @@ def ask(
 
         async def stream_response():
             nonlocal response_chunks
+            t0 = time.perf_counter()
 
             # Best practice: thread per utente
             config = {"configurable": {"thread_id": str(user_id)}}
+            logger.info(f"STREAM - start; thread_id={user_id}; query='{_truncate_for_log(query)}'")
 
             # Memoria ibrida: volatile se presente, altrimenti seed da DB
             try:
@@ -271,6 +348,7 @@ def ask(
                 buffer_pretool: list[str] = []
                 encountered_tool = False
                 allow_streaming_tokens = False
+                late_pretool_final: Optional[str] = None
                 async for event in agent_executor.astream_events(
                     {"messages": [HumanMessage(query)]},
                     config=config,
@@ -278,16 +356,19 @@ def ask(
                 ):
                     kind = event.get("event")
 
-                    # Rilevazione tool start/end
+                    # Rilevazione tool start/end dall'evento (best-effort; non sempre presente)
                     if isinstance(kind, str):
                         lower_kind = kind.lower()
                         if "on_tool" in lower_kind and ("start" in lower_kind):
                             encountered_tool = True
                             # scarta il buffer pre-tool (preamboli inutili)
+                            dropped = len("".join(buffer_pretool))
                             buffer_pretool = []
+                            logger.info(f"STREAM - tool detected (start); dropped_pretool_chars={dropped}")
                         elif "on_tool" in lower_kind and ("end" in lower_kind or "finish" in lower_kind):
                             # da qui in poi streammiamo i token
                             allow_streaming_tokens = True
+                            logger.info("STREAM - tool finished; start streaming post-tool tokens")
 
                     if kind == "on_chat_model_stream":
                         chunk = event["data"].get("chunk")
@@ -319,6 +400,7 @@ def ask(
                                         "name": getattr(m, "name", None),
                                         "result": m.content,
                                     })
+                                    encountered_tool = True
                         except Exception as e:
                             logger.warning(f"Tool extraction error: {e}")
 
@@ -327,18 +409,10 @@ def ask(
                             last_msg = final_messages[-1]
                             if isinstance(last_msg, AIMessage):
                                 content_text = _extract_text(last_msg.content)
-                                # Caso A: non c'è stato tool → flush del buffer pre-tool
+                                # Caso A: non c'è stato tool → NON emettere subito; salva e decidi a fine run
                                 if content_text and not encountered_tool:
-                                    if buffer_pretool:
-                                        buffered = "".join(buffer_pretool)
-                                        response_chunks.append(buffered)
-                                        yield f"data: {json.dumps({'data': buffered})}\n\n"
-                                        buffer_pretool = []
-                                    # Evita doppio invio se content_text ripete il buffered
-                                    if not response_chunks or (response_chunks and response_chunks[-1] != content_text):
-                                        response_chunks.append(content_text)
-                                        yield f"data: {json.dumps({'data': content_text})}\n\n"
-                                # Caso B: c'è stato tool ma non abbiamo streammato nulla post-tool
+                                    late_pretool_final = content_text
+                                # Caso B: c'è stato tool → ignora buffer_pretool, invia solo il finale se non già streammato
                                 elif content_text and encountered_tool and not response_chunks:
                                     response_chunks.append(content_text)
                                     yield f"data: {json.dumps({'data': content_text})}\n\n"
@@ -364,11 +438,28 @@ def ask(
                 except Exception as e:
                     logger.warning(f"RUN - Fallback from tool failed: {e}")
 
+            # Fine streaming: se non c'è stato tool, flush del pre-tool buffer e dell'eventuale finale
+            if not encountered_tool:
+                if buffer_pretool:
+                    buffered = "".join(buffer_pretool)
+                    if buffered:
+                        response_chunks.append(buffered)
+                        yield f"data: {json.dumps({'data': buffered})}\n\n"
+                if late_pretool_final:
+                    # Evita duplicare se identico all'ultimo chunk
+                    if not response_chunks or response_chunks[-1] != late_pretool_final:
+                        response_chunks.append(late_pretool_final)
+                        yield f"data: {json.dumps({'data': late_pretool_final})}\n\n"
+
             # Persistenza su DB a fine streaming
             response = "".join([c for c in response_chunks if c])
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logger.info(f"RUN TERMINATA alle {timestamp}: response_len={len(response)} tool_records={len(tool_records)}")
-            logger.info(f"\nRUN - Risposta:\n\n{response}")
+            duration_ms = int((time.perf_counter() - t0) * 1000)
+            logger.info(
+                f"STREAM - done at {timestamp}; duration_ms={duration_ms}; response_len={len(response)}; "
+                f"encountered_tool={encountered_tool}; tool_records={len(tool_records)}; "
+                f"preview='{_truncate_for_log(response)}'"
+            )
 
             try:
                 data = {
