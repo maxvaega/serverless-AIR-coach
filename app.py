@@ -45,9 +45,32 @@ async def stream_endpoint(
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
         logger.info(f"Request received: \ntoken= {token}\nmessage= {request.message}\nuserid= {request.userid}")
-        stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
+
+        # Con il nuovo codice, ask() con stream=True restituisce una coroutine
+        # che a sua volta restituisce un async generator
+        # Dobbiamo await la coroutine per ottenere l'async generator
+        async_generator = await ask(
+            request.message,
+            request.userid,
+            chat_history=True,
+            stream=True,
+            user_data=True,
+            token=token  # Passa il token per l'autenticazione Auth0
+        )
+
         logger.info("Starting streaming response...")
-        return StreamingResponse(stream_response, media_type="text/event-stream")
+
+        # StreamingResponse gestirà automaticamente l'async generator
+        return StreamingResponse(
+            async_generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"  # Disabilita buffering per Nginx/Vercel
+            }
+        )
+
     except Exception as e:
         logger.error(f"Exception occurred in /stream_query: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")

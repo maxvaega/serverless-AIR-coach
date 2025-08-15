@@ -1,12 +1,13 @@
+import asyncio
 import datetime
 import json
 from typing import AsyncGenerator, Optional, Union
-import asyncio
+from contextlib import asynccontextmanager
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, ToolMessage
 from langgraph.prebuilt import create_react_agent
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.memory import MemorySaver
 
 from .env import FORCED_MODEL, DATABASE_NAME, COLLECTION_NAME
 from .database import get_data, insert_data
@@ -22,11 +23,15 @@ from .logging_config import logger
 # ------------------------------------------------------------------------------
 HISTORY_LIMIT = 10
 
-combined_docs: str = ""
-system_prompt: str = ""
-llm: Optional[ChatGoogleGenerativeAI] = None  # non usare a livello globale in serverless
-checkpointer: Optional[InMemorySaver] = None  # non usare a livello globale in serverless
-agent_executor = None  # non usare a livello globale in serverless
+# Usa un dizionario per evitare problemi con le variabili globali in serverless
+_agent_state = {
+    "combined_docs": "",
+    "system_prompt": "",
+    "llm": None,
+    "checkpointer": None,
+    "agent_executor": None,
+    "lock": asyncio.Lock()  # Per evitare race conditions in serverless
+}
 
 
 # ------------------------------------------------------------------------------
@@ -59,23 +64,65 @@ def _extract_text(content) -> str:
     return ""
 
 
-def initialize_agent_state(force: bool = False) -> None:
+async def initialize_agent_async(force: bool = False) -> None:
     """
-    Inizializza solo i documenti e il system_prompt. L'agente/LLM vengono
-    creati per-request per evitare problemi di event loop in ambiente serverless.
+    Inizializza prompt, LLM e agente in modo asincrono con lock per evitare race conditions.
     """
-    global combined_docs, system_prompt
+    async with _agent_state["lock"]:
+        if not force and _agent_state["agent_executor"] is not None:
+            return
 
+        try:
+            # Reperisce/aggiorna i documenti
+            if force or not _agent_state["combined_docs"]:
+                _agent_state["combined_docs"] = get_combined_docs()
+                _agent_state["system_prompt"] = build_system_prompt(_agent_state["combined_docs"])
+
+            # Definisce LLM
+            model = FORCED_MODEL
+            logger.info(f"Selected LLM model: {model}")
+            _agent_state["llm"] = ChatGoogleGenerativeAI(
+                model=model,
+                temperature=0.7,
+            )
+
+            # Usa MemorySaver invece di InMemorySaver (deprecato)
+            tools = [test_licenza]
+            _agent_state["checkpointer"] = MemorySaver()
+            _agent_state["agent_executor"] = create_react_agent(
+                _agent_state["llm"],
+                tools,
+                prompt=_agent_state["system_prompt"],
+                checkpointer=_agent_state["checkpointer"],
+            )
+            logger.info("Agent initialized successfully.")
+        except Exception as e:
+            logger.error(f"Errore durante l'inizializzazione dell'agente: {e}")
+            raise
+
+
+def initialize_agent(force: bool = False) -> None:
+    """
+    Wrapper sincrono per compatibilità con codice esistente.
+    """
     try:
-        if force or not combined_docs or not system_prompt:
-            combined_docs = get_combined_docs()
-            system_prompt = build_system_prompt(combined_docs)
+        # Crea un nuovo event loop se necessario
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        loop.run_until_complete(initialize_agent_async(force))
     except Exception as e:
-        logger.error(f"Errore durante l'inizializzazione dello stato agente: {e}")
+        logger.error(f"Initial agent initialization failed: {e}")
 
 
-# Evita inizializzazione eager di oggetti legati all'event loop in ambiente serverless.
-# Inizializza solo il prompt/documenti al primo utilizzo.
+# Inizializzazione lazy invece di eager per evitare problemi in serverless
+# L'inizializzazione avverrà al primo utilizzo
 
 
 # ------------------------------------------------------------------------------
@@ -83,21 +130,19 @@ def initialize_agent_state(force: bool = False) -> None:
 # ------------------------------------------------------------------------------
 def update_docs():
     """
-    Wrapper per aggiornare i documenti su S3 e lo stato locale del modulo (combined_docs/system_prompt).
-    Non ricrea l'agente per mantenere il comportamento esistente.
+    Wrapper per aggiornare i documenti su S3 e lo stato locale del modulo.
     """
-    global combined_docs, system_prompt
     update_result = update_docs_from_s3()
 
     if update_result and "system_prompt" in update_result:
-        combined_docs = update_result["system_prompt"]
-        system_prompt = build_system_prompt(combined_docs)
+        _agent_state["combined_docs"] = update_result["system_prompt"]
+        _agent_state["system_prompt"] = build_system_prompt(_agent_state["combined_docs"])
         logger.info("System prompt aggiornato con successo.")
 
     return update_result
 
 
-def ask(
+async def ask_async(
     query: str,
     user_id: str,
     chat_history: bool = False,
@@ -106,30 +151,15 @@ def ask(
     token: Optional[str] = None,
 ) -> Union[str, AsyncGenerator[str, None]]:
     """
-    Elabora una query tramite agente LangGraph e restituisce la risposta, opzionalmente in streaming.
-    L'agente può usare tool. La memoria usa il checkpointer se presente, altrimenti si ricostruisce da MongoDB.
-    Se richiesto, i metadata profilo utente vengono recuperati da Auth0.
+    Versione asincrona della funzione ask che gestisce correttamente l'event loop.
     """
-    # Inizializza prompt/documenti (lazy)
-    initialize_agent_state()
+    # Garantisce che l'agente sia disponibile
+    if _agent_state["agent_executor"] is None:
+        await initialize_agent_async()
 
-    # Costruisce agent per-request per evitare problemi di event loop chiuso
-    model = FORCED_MODEL
-    logger.info(f"Selected LLM model: {model}")
-    local_llm = ChatGoogleGenerativeAI(
-        model=model,
-        temperature=0.7,
-    )
-    tools = [test_licenza]
-    local_checkpointer = InMemorySaver()
-    agent_executor = create_react_agent(
-        local_llm,
-        tools,
-        prompt=system_prompt,
-        checkpointer=local_checkpointer,
-    )
-
-    # Branch non-stream (sync)
+    agent_executor = _agent_state["agent_executor"]
+    
+    # Branch non-stream
     if not stream:
         try:
             messages = []
@@ -149,7 +179,7 @@ def ask(
                     logger.error(f"Errore nel recuperare i dati dell'utente per l'ID {user_id}: {e}")
                     return f"data: {{'error': 'Errore nel recuperare i dati dell\\'utente: {str(e)}'}}\n\n"
 
-            # Gestione manuale history
+            # Gestione history
             try:
                 if chat_history:
                     history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=HISTORY_LIMIT)
@@ -161,12 +191,11 @@ def ask(
                 logger.error(f"HISTORY - Errore nel recuperare la chat history: {e}")
                 return f"data: {{'error': 'Errore nel recuperare la chat history: {str(e)}'}}\n\n"
 
-            # Messaggio corrente
             messages.append(HumanMessage(query))
 
-            # Invocazione sincrona
+            # Usa ainvoke per operazioni asincrone
             try:
-                result = agent_executor.invoke({"messages": messages})
+                result = await agent_executor.ainvoke({"messages": messages})
                 final_response = result["messages"][-1].content
                 return final_response
             except Exception as e:
@@ -176,31 +205,27 @@ def ask(
             logger.error(f"Errore non gestito nel branch non-stream: {e}")
             return "Errore interno inatteso."
 
-    # Branch stream (async)
+    # Branch stream
     else:
-        response_chunks = []
-
         async def stream_response():
-            nonlocal response_chunks
-
-            # Best practice: thread per utente
+            response_chunks = []
             config = {"configurable": {"thread_id": str(user_id)}}
 
-            # Memoria ibrida: volatile se presente, altrimenti seed da DB
+            # Controllo stato memoria
             try:
-                state = agent_executor.get_state(config)
+                state = await agent_executor.aget_state(config)
                 existing_messages = state.values.get("messages") if state and hasattr(state, "values") else None
                 msg_count = len(existing_messages) if existing_messages else 0
-                logger.info(f"HISTORY - Recupero lo stato dell'agente. Numero di messaggi in memoria: {msg_count}")
+                logger.info(f"HISTORY - Numero di messaggi in memoria: {msg_count}")
             except Exception as e:
                 logger.error(f"Errore nel recuperare lo stato dell'agente: {e}")
                 existing_messages = None
 
             if not existing_messages:
-                logger.info("HISTORY - Nessun messaggio trovato in memoria volatile, cerco cronologia conversazione su DB...")
+                logger.info("HISTORY - Nessun messaggio in memoria, cerco su DB...")
                 seed_messages = []
 
-                # Cold start: inject user info in volatile memory
+                # User data cold start
                 if user_data:
                     try:
                         ui = get_cached_user_data(user_id)
@@ -211,11 +236,11 @@ def ask(
                                 set_cached_user_data(user_id, ui)
                         if ui:
                             seed_messages.append(AIMessage(ui))
-                            logger.info("HISTORY / USER DATA - User info inserito nella memoria volatile del thread (cold start)")
+                            logger.info("HISTORY / USER DATA - User info inserito in memoria")
                     except Exception as e:
-                        logger.error(f"Errore nel recuperare i dati utente per cold start: {e}")
+                        logger.error(f"Errore nel recuperare i dati utente: {e}")
 
-                # Seed da DB se richiesto
+                # Seed da DB
                 if chat_history:
                     try:
                         history = get_data(
@@ -241,21 +266,21 @@ def ask(
                             if msg.get("system"):
                                 seed_messages.append(AIMessage(msg["system"]))
                         if history:
-                            logger.info(f"HISTORY - Cronologia recuperata da DB: {len(history)} messaggi")
+                            logger.info(f"HISTORY - Recuperati {len(history)} messaggi da DB")
                     except Exception as e:
                         logger.error(f"Errore nel recuperare la chat history: {e}")
 
-                # Aggiorna memoria volatile
+                # Aggiorna stato
                 if seed_messages:
                     try:
-                        agent_executor.update_state(config, {"messages": seed_messages})
+                        await agent_executor.aupdate_state(config, {"messages": seed_messages})
                     except Exception as e:
                         logger.error(f"Error seeding agent state: {e}")
 
             tool_records = []
 
             try:
-                # Stream solo il messaggio corrente; lo storico è nello state
+                # Streaming con gestione corretta dell'async iterator
                 async for event in agent_executor.astream_events(
                     {"messages": [HumanMessage(query)]},
                     config=config,
@@ -277,11 +302,9 @@ def ask(
                         final_output = data.get("output", {}) if isinstance(data, dict) else {}
                         final_messages = final_output.get("messages", []) if isinstance(final_output, dict) else []
 
-                        logger.info(
-                            f"RUN - final - messages count={len(final_messages)}; types={[type(m).__name__ for m in final_messages]}"
-                        )
+                        logger.info(f"RUN - messages count={len(final_messages)}")
 
-                        # Raccoglie ToolMessage prodotti nel run
+                        # Raccoglie tool messages
                         try:
                             for m in final_messages:
                                 if isinstance(m, ToolMessage):
@@ -292,7 +315,7 @@ def ask(
                         except Exception as e:
                             logger.warning(f"Tool extraction error: {e}")
 
-                        # Ultimo contenuto assistente (se non già streammato)
+                        # Ultimo contenuto
                         if final_messages:
                             last_msg = final_messages[-1]
                             if isinstance(last_msg, AIMessage):
@@ -301,15 +324,11 @@ def ask(
                                     response_chunks.append(content_text)
                                     yield f"data: {json.dumps({'data': content_text})}\n\n"
 
-            except RuntimeError as e:
-                # Tipico in serverless: event loop chiuso tra richieste
-                logger.error(f"Streaming RuntimeError: {e}")
-                yield f"data: {{'error': 'Errore nello streaming della risposta dell\\'agente: Event loop non disponibile'}}\n\n"
             except Exception as e:
-                logger.error(f"Errore nello streaming della risposta dell'agente: {e}")
-                yield f"data: {{'error': 'Errore nello streaming della risposta dell\\'agente: {str(e)}'}}\n\n"
+                logger.error(f"Errore nello streaming: {e}")
+                yield f"data: {json.dumps({'error': f'Errore streaming: {str(e)}'})}\n\n"
 
-            # Fallback: se non c'è testo ma abbiamo tool_results, emetti ultimo tool
+            # Fallback tool output
             if not response_chunks and tool_records:
                 try:
                     last_tool = tool_records[-1]
@@ -318,15 +337,13 @@ def ask(
                     if tool_text:
                         yield f"data: {json.dumps({'data': tool_text})}\n\n"
                         response_chunks.append(tool_text)
-                        logger.info("RUN - Risposta del tool emessa a causa di output dell'assistente vuoto")
                 except Exception as e:
-                    logger.warning(f"RUN - Fallback from tool failed: {e}")
+                    logger.warning(f"Fallback tool failed: {e}")
 
-            # Persistenza su DB a fine streaming
+            # Salva su DB
             response = "".join([c for c in response_chunks if c])
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logger.info(f"RUN TERMINATA alle {timestamp}: response_len={len(response)} tool_records={len(tool_records)}")
-            logger.info(f"\nRUN - Risposta:\n\n{response}")
+            logger.info(f"RUN TERMINATA: response_len={len(response)}")
 
             try:
                 data = {
@@ -336,13 +353,44 @@ def ask(
                     "timestamp": timestamp,
                 }
                 if tool_records:
-                    data["tool"] = tool_records[-1]  # salva solo l'ultimo tool record
+                    data["tool"] = tool_records[-1]
 
                 if response or data.get("tool"):
                     insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                    logger.info(f"DB - Risposta inserita nella collection: {COLLECTION_NAME} ")
+                    logger.info(f"DB - Dati salvati")
             except Exception as e:
-                logger.error(f"DB - Errore nell'inserire i dati nella collection: {e}")
-                # Non inviare error al client dopo la chiusura dello stream
+                logger.error(f"DB - Errore salvataggio: {e}")
 
         return stream_response()
+
+
+def ask(
+    query: str,
+    user_id: str,
+    chat_history: bool = False,
+    stream: bool = False,
+    user_data: bool = False,
+    token: Optional[str] = None,
+) -> Union[str, AsyncGenerator[str, None]]:
+    """
+    Wrapper sincrono per compatibilità. Gestisce correttamente l'event loop per Vercel.
+    """
+    # Per Vercel, usiamo un approccio che gestisce meglio l'event loop
+    if stream:
+        # Per lo streaming, restituiamo direttamente l'async generator
+        # Il chiamante dovrà gestirlo correttamente con async for
+        return ask_async(query, user_id, chat_history, stream, user_data, token)
+    else:
+        # Per le richieste non-stream, eseguiamo in modo sincrono
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(
+            ask_async(query, user_id, chat_history, stream, user_data, token)
+        )
