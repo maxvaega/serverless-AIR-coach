@@ -13,7 +13,7 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
    - Si prepara `config={"configurable": {"thread_id": userid}}`.
    - Si legge lo stato del thread: se la memoria volatile contiene `messages`, la si usa direttamente.
    - Se è vuota, si preleva la storia da MongoDB (ultimi N turni), si ricostruiscono `HumanMessage`/`AIMessage` e, se presenti, i risultati tool storici come contesto, poi si effettua `update_state(config, {"messages": seed_messages})`.
-5. Invocazione in streaming: si invia solo il messaggio corrente (`{"messages": [HumanMessage(query)]}`), affidando lo storico al checkpointer. Lo streaming applica un buffering guidato dagli eventi: i token “pre‑tool” vengono bufferizzati; se non viene usato alcun tool, il buffer viene inviato alla fine, altrimenti viene scartato e si streammano solo i token “post‑tool”.
+5. Invocazione in streaming: si invia solo il messaggio corrente (`{"messages": [HumanMessage(query)]}`), affidando lo storico al checkpointer.
 6. Cattura tool: alla fine del run, dai `messages` di output si estraggono i `ToolMessage` prodotti in questo turno.
 7. Persistenza: su MongoDB si salva la tripletta `human`/`system`/`tool` (se presente), insieme a `userId` e `timestamp`.
 
@@ -88,8 +88,8 @@ app.py
 
 ### src/rag.py
 - Gestione system prompt e documenti S3 (fetch, cache, update).
-- Agente LangGraph creato per-request con `prompt` e `InMemorySaver` condiviso a livello di processo (no executor globale) per evitare problemi di event loop chiuso su serverless.
-- Funzione `ask`: memoria ibrida (checkpointer volatile per thread + seed da MongoDB alla cold start), streaming SSE con buffering guidato dagli eventi (pre‑tool bufferizzato/scartato, post‑tool streammato), estrazione `ToolMessage`, persistenza tripletta `human/system/tool`.
+- Agente LangGraph creato per-request con `prompt` e `InMemorySaver` per evitare problemi di event loop chiuso su serverless.
+- Funzione `ask`: memoria ibrida (checkpointer volatile per thread + seed da MongoDB alla cold start), streaming SSE, estrazione `ToolMessage`, persistenza tripletta `human/system/tool`.
 - `create_prompt_file`: salva system prompt su S3.
 
 ### src/auth.py
@@ -134,17 +134,15 @@ Per le variabili di ambiente, fare interamente riferimento al file `.env.example
 - **Persistenza**: Tutte le interazioni vengono salvate su MongoDB.
 - **Prompt Dinamico**: Il system prompt può essere aggiornato senza riavviare il servizio, aggiornando i file su S3 e chiamando `/api/update_docs`.
 
-## Gestione Event Loop in Ambiente Serverless e Streaming
+## Gestione Event Loop in Ambiente Serverless
 
 - Problema riscontrato: alla seconda richiesta consecutiva si verificava `Event loop is closed` durante lo streaming.
 - Soluzione adottata:
   - Inizializzazione lazy di `combined_docs` e `system_prompt` (no oggetti async all'import).
   - Creazione dell'agente per-request: nuova istanza di modello e `create_react_agent(...)` dentro `ask()`.
   - Checkpointer condiviso a livello di processo (`InMemorySaver`) per mantenere memoria volatile tra richieste (finché il container resta caldo).
-  - Streaming con buffering: se viene usato un tool, scarta l’introduzione “pre‑tool” e streamma solo il “post‑tool”; se non viene usato nessun tool, streamma normalmente il contenuto bufferizzato.
   - Memoria: se lo stato volatile del thread è vuoto, si esegue il seed dei `messages` da MongoDB e si aggiorna lo stato con `update_state(config, {...})`.
   - Gestione errori: intercettato `RuntimeError` nello streaming per segnalare chiaramente la condizione di event loop non disponibile.
-  - Logging: log sintetici (thread_id, durata, response_len, presenza tool, anteprima troncata) per diagnosi; eliminati log di testo completi.
 
 
 ## Riferimenti ai file principali

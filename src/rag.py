@@ -389,7 +389,7 @@ def ask(
                         final_messages = final_output.get("messages", []) if isinstance(final_output, dict) else []
 
                         logger.info(
-                            f"RUN - messages count={len(final_messages)}; types={[type(m).__name__ for m in final_messages]}"
+                            f"RUN - final - messages count={len(final_messages)}; types={[type(m).__name__ for m in final_messages]}"
                         )
 
                         # Raccoglie ToolMessage prodotti nel run

@@ -5,7 +5,7 @@
 AIR Coach API è un'applicazione basata su FastAPI progettata per gestire interazioni con un chatbot intelligente. L'applicazione utilizza un agente LangGraph prebuilt (ReAct) con modello Gemini 2.0 di Google per generare risposte, con capacità di:
 - caricare dinamicamente il contesto da file Markdown su AWS S3 (system prompt)
 - invocare tool applicativi
-- gestire memoria a breve termine tramite `InMemorySaver` (volatile, condivisa a livello di processo/istanza server: persiste tra richieste finché il container resta "caldo")
+- gestire memoria a breve termine tramite `InMemorySaver` (volatile, per istanza)
 - ibridare la memoria con la cronologia persistita su MongoDB (fallback serverless)
 
 ## Struttura del Progetto
@@ -34,13 +34,10 @@ L'applicazione carica dinamicamente il contesto per il modello LLM da file Markd
 
 - Agente: `create_react_agent` con `prompt=system_prompt` e `tools=[test_licenza]`.
 - Memoria (serverless‑friendly):
-  - Volatile: `InMemorySaver` condiviso a livello di processo (presente finché l’istanza è “calda”).
+  - Volatile: `InMemorySaver` (presente finché l’istanza è “calda”).
   - Persistita: MongoDB (cronologia utente). Se la memoria volatile è assente, la cronologia viene letta da DB e “seedata” nella memoria volatile del thread.
 - `thread_id`: per utente (passato via `config`), un thread per utente.
-  - Streaming: risposte in streaming asincrone (SSE) con buffering guidato dagli eventi:
-    - Se l’agente NON usa tool, la risposta viene streammata normalmente (flush del buffer pre‑tool alla fine del run).
-    - Se l’agente usa un tool, eventuali token “pre‑tool” (preamboli) vengono scartati e si streammano solo i token “post‑tool” (risultato finale coerente).
-    - Opzionale: i tool possono emettere progress via stream "custom".
+- Streaming: risposte in streaming asincrone (SSE).
 - Tool: il risultato dei tool viene reso disponibile al modello all’interno del turno corrente e salvato su DB al termine.
 
 ## Endpoint API
@@ -87,7 +84,7 @@ Fare riferimento esclusivamente al file `.env.example` per l’elenco completo d
 - Caching: Implementato per i documenti S3 per migliorare le prestazioni
 - Lock di threading: Utilizzato per sincronizzare gli aggiornamenti manuali dei documenti
 - Gestione delle eccezioni: Implementata negli endpoint
-- Logging: log sintetici e strutturati (thread_id, durata, response_len, presenza tool, anteprima troncata) per monitoraggio e diagnosi; contenuti testuali completi non vengono più loggati.
+- Logging: Sistema di logging configurato per monitorare l’applicazione
 
 ## Flusso di Elaborazione delle Query (streaming)
 
