@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest
-from src.rag import ask_stream, update_docs
+from src.rag import ask_stream, update_docs, initialize_agent_async
 from src.s3_utils import create_prompt_file
 from src.env import is_production
 import uvicorn
@@ -125,6 +125,15 @@ async def update_docs_endpoint():
     except Exception as e:
         logger.error(f"Exception occurred while updating docs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("STARTUP - Inizializzazione agente...")
+    try:
+        await initialize_agent_async()
+        logger.info("STARTUP - Agente inizializzato con successo")
+    except Exception as e:
+        logger.error(f"STARTUP - Errore inizializzazione agente: {e}")
 
 app.include_router(api_router) # for /api/ prefix
 

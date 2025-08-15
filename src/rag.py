@@ -127,14 +127,30 @@ async def ask_stream(
     Funzione asincrona per streaming delle risposte.
     Restituisce sempre un async generator per lo streaming.
     """
-    # Inizializza l'agente se necessario
-    if _agent_state["agent_executor"] is None:
-        try:
-            await asyncio.wait_for(initialize_agent_async(), timeout=10.0)
-        except asyncio.TimeoutError:
-            logger.error("TIMEOUT durante inizializzazione agente")
-            yield f"data: {json.dumps({'error': 'Agent initialization timeout'})}\n\n"
-            return
+    logger.info(f"STREAM START - user_id={user_id}, query_len={len(query)}")
+    
+    try:
+        # Inizializza l'agente se necessario
+        logger.info("AGENT - Controllo inizializzazione...")
+        if _agent_state["agent_executor"] is None:
+            logger.info("AGENT - Inizializzazione necessaria")
+            try:
+                await asyncio.wait_for(initialize_agent_async(), timeout=25.0)  # Aumentato a 25 secondi
+                logger.info("AGENT - Inizializzazione completata")
+            except asyncio.TimeoutError:
+                logger.error("TIMEOUT durante inizializzazione agente")
+                yield f"data: {json.dumps({'error': 'Agent initialization timeout'})}\n\n"
+                return
+            except Exception as e:
+                logger.error(f"ERRORE durante inizializzazione agente: {e}")
+                yield f"data: {json.dumps({'error': f'Agent init error: {str(e)}'})}\n\n"
+                return
+        else:
+            logger.info("AGENT - Già inizializzato")
+    except Exception as e:
+        logger.error(f"ERRORE FATALE durante setup: {e}")
+        yield f"data: {json.dumps({'error': f'Setup error: {str(e)}'})}\n\n"
+        return
     
     agent_executor = _agent_state["agent_executor"]
     response_chunks = []
