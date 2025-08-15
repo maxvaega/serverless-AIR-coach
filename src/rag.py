@@ -141,256 +141,180 @@ def update_docs():
 
     return update_result
 
-
-async def ask_async(
+async def ask_stream(
     query: str,
     user_id: str,
     chat_history: bool = False,
-    stream: bool = False,
     user_data: bool = False,
     token: Optional[str] = None,
-) -> Union[str, AsyncGenerator[str, None]]:
+) -> AsyncGenerator[str, None]:
     """
-    Versione asincrona della funzione ask che gestisce correttamente l'event loop.
+    Funzione asincrona per streaming delle risposte.
+    Restituisce sempre un async generator per lo streaming.
     """
-    # Garantisce che l'agente sia disponibile
+    # Inizializza l'agente se necessario
     if _agent_state["agent_executor"] is None:
         await initialize_agent_async()
-
-    agent_executor = _agent_state["agent_executor"]
     
-    # Branch non-stream
-    if not stream:
+    agent_executor = _agent_state["agent_executor"]
+    response_chunks = []
+    config = {"configurable": {"thread_id": str(user_id)}}
+    
+    try:
+        # Controlla lo stato della memoria
         try:
-            messages = []
-            user_info = None
-
+            state = await agent_executor.aget_state(config)
+            existing_messages = state.values.get("messages") if state and hasattr(state, "values") else None
+            msg_count = len(existing_messages) if existing_messages else 0
+            logger.info(f"HISTORY - Numero di messaggi in memoria: {msg_count}")
+        except Exception as e:
+            logger.error(f"Errore nel recuperare lo stato dell'agente: {e}")
+            existing_messages = None
+        
+        # Se non ci sono messaggi in memoria, carica da DB
+        if not existing_messages:
+            logger.info("HISTORY - Nessun messaggio in memoria, cerco su DB...")
+            seed_messages = []
+            
+            # Carica dati utente se richiesto
             if user_data:
                 try:
-                    user_info = get_cached_user_data(user_id)
-                    if not user_info:
+                    ui = get_cached_user_data(user_id)
+                    if not ui:
                         user_metadata = get_user_metadata(user_id, token=token)
-                        user_info = format_user_metadata(user_metadata)
-                        set_cached_user_data(user_id, user_info)
-                    if user_info:
-                        messages.append(AIMessage(user_info))
-                        logger.info(f"User info aggiunto ai messaggi: {user_info}")
-                except Exception as e:
-                    logger.error(f"Errore nel recuperare i dati dell'utente per l'ID {user_id}: {e}")
-                    return f"data: {{'error': 'Errore nel recuperare i dati dell\\'utente: {str(e)}'}}\n\n"
-
-            # Gestione history
-            try:
-                if chat_history:
-                    history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=HISTORY_LIMIT)
-                    for msg in history:
-                        messages.append(HumanMessage(msg.get("human", "")))
-                        messages.append(AIMessage(msg.get("system", "")))
-                        logger.info(f"Chat history: {msg.get('human')} \n-> \n{msg.get('system')}")
-            except Exception as e:
-                logger.error(f"HISTORY - Errore nel recuperare la chat history: {e}")
-                return f"data: {{'error': 'Errore nel recuperare la chat history: {str(e)}'}}\n\n"
-
-            messages.append(HumanMessage(query))
-
-            # Usa ainvoke per operazioni asincrone
-            try:
-                result = await agent_executor.ainvoke({"messages": messages})
-                final_response = result["messages"][-1].content
-                return final_response
-            except Exception as e:
-                logger.error(f"Errore nell'invocare l'agente: {e}")
-                return "Errore nell'invocare l'agente."
-        except Exception as e:
-            logger.error(f"Errore non gestito nel branch non-stream: {e}")
-            return "Errore interno inatteso."
-
-    # Branch stream
-    else:
-        async def stream_response():
-            response_chunks = []
-            config = {"configurable": {"thread_id": str(user_id)}}
-
-            # Controllo stato memoria
-            try:
-                state = await agent_executor.aget_state(config)
-                existing_messages = state.values.get("messages") if state and hasattr(state, "values") else None
-                msg_count = len(existing_messages) if existing_messages else 0
-                logger.info(f"HISTORY - Numero di messaggi in memoria: {msg_count}")
-            except Exception as e:
-                logger.error(f"Errore nel recuperare lo stato dell'agente: {e}")
-                existing_messages = None
-
-            if not existing_messages:
-                logger.info("HISTORY - Nessun messaggio in memoria, cerco su DB...")
-                seed_messages = []
-
-                # User data cold start
-                if user_data:
-                    try:
-                        ui = get_cached_user_data(user_id)
-                        if not ui:
-                            user_metadata = get_user_metadata(user_id, token=token)
-                            ui = format_user_metadata(user_metadata)
-                            if ui:
-                                set_cached_user_data(user_id, ui)
+                        ui = format_user_metadata(user_metadata)
                         if ui:
-                            seed_messages.append(AIMessage(ui))
-                            logger.info("HISTORY / USER DATA - User info inserito in memoria")
-                    except Exception as e:
-                        logger.error(f"Errore nel recuperare i dati utente: {e}")
-
-                # Seed da DB
-                if chat_history:
-                    try:
-                        history = get_data(
-                            DATABASE_NAME,
-                            COLLECTION_NAME,
-                            filters={"userId": user_id},
-                            limit=HISTORY_LIMIT,
-                        )
-                        for msg in history:
-                            if msg.get("human"):
-                                seed_messages.append(HumanMessage(msg["human"]))
-
-                            tool_entry = msg.get("tool")
-                            if tool_entry:
-                                try:
-                                    tool_name = tool_entry.get("name") if isinstance(tool_entry, dict) else None
-                                    tool_payload = tool_entry.get("result") if isinstance(tool_entry, dict) else tool_entry
-                                    tool_text = json.dumps(tool_payload) if not isinstance(tool_payload, str) else tool_payload
-                                    seed_messages.append(AIMessage(f"previous tool [{tool_name}] result : \n{tool_text}"))
-                                except Exception:
-                                    pass
-
-                            if msg.get("system"):
-                                seed_messages.append(AIMessage(msg["system"]))
-                        if history:
-                            logger.info(f"HISTORY - Recuperati {len(history)} messaggi da DB")
-                    except Exception as e:
-                        logger.error(f"Errore nel recuperare la chat history: {e}")
-
-                # Aggiorna stato
-                if seed_messages:
-                    try:
-                        await agent_executor.aupdate_state(config, {"messages": seed_messages})
-                    except Exception as e:
-                        logger.error(f"Error seeding agent state: {e}")
-
-            tool_records = []
-
-            try:
-                # Streaming con gestione corretta dell'async iterator
-                async for event in agent_executor.astream_events(
-                    {"messages": [HumanMessage(query)]},
-                    config=config,
-                    version="v2",
-                ):
-                    kind = event.get("event")
-
-                    if kind == "on_chat_model_stream":
-                        chunk = event["data"].get("chunk")
-                        if isinstance(chunk, AIMessageChunk):
-                            content_text = _extract_text(chunk.content)
-                            if content_text:
-                                response_chunks.append(content_text)
-                                data_dict = {"data": content_text}
-                                yield f"data: {json.dumps(data_dict)}\n\n"
-
-                    elif kind in ("on_agent_finish", "on_chain_end"):
-                        data = event.get("data", {})
-                        final_output = data.get("output", {}) if isinstance(data, dict) else {}
-                        final_messages = final_output.get("messages", []) if isinstance(final_output, dict) else []
-
-                        logger.info(f"RUN - messages count={len(final_messages)}")
-
-                        # Raccoglie tool messages
-                        try:
-                            for m in final_messages:
-                                if isinstance(m, ToolMessage):
-                                    tool_records.append({
-                                        "name": getattr(m, "name", None),
-                                        "result": m.content,
-                                    })
-                        except Exception as e:
-                            logger.warning(f"Tool extraction error: {e}")
-
-                        # Ultimo contenuto
-                        if final_messages:
-                            last_msg = final_messages[-1]
-                            if isinstance(last_msg, AIMessage):
-                                content_text = _extract_text(last_msg.content)
-                                if content_text and not response_chunks:
-                                    response_chunks.append(content_text)
-                                    yield f"data: {json.dumps({'data': content_text})}\n\n"
-
-            except Exception as e:
-                logger.error(f"Errore nello streaming: {e}")
-                yield f"data: {json.dumps({'error': f'Errore streaming: {str(e)}'})}\n\n"
-
-            # Fallback tool output
-            if not response_chunks and tool_records:
-                try:
-                    last_tool = tool_records[-1]
-                    tool_result = last_tool.get("result")
-                    tool_text = tool_result if isinstance(tool_result, str) else json.dumps(tool_result)
-                    if tool_text:
-                        yield f"data: {json.dumps({'data': tool_text})}\n\n"
-                        response_chunks.append(tool_text)
+                            set_cached_user_data(user_id, ui)
+                    if ui:
+                        seed_messages.append(AIMessage(ui))
+                        logger.info("HISTORY / USER DATA - User info inserito in memoria")
                 except Exception as e:
-                    logger.warning(f"Fallback tool failed: {e}")
-
-            # Salva su DB
-            response = "".join([c for c in response_chunks if c])
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logger.info(f"RUN TERMINATA: response_len={len(response)}")
-
-            try:
-                data = {
-                    "human": query,
-                    "system": response,
-                    "userId": user_id,
-                    "timestamp": timestamp,
-                }
-                if tool_records:
-                    data["tool"] = tool_records[-1]
-
-                if response or data.get("tool"):
-                    insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                    logger.info(f"DB - Dati salvati")
-            except Exception as e:
-                logger.error(f"DB - Errore salvataggio: {e}")
-
-        return stream_response()
-
-
-def ask(
-    query: str,
-    user_id: str,
-    chat_history: bool = False,
-    stream: bool = False,
-    user_data: bool = False,
-    token: Optional[str] = None,
-) -> Union[str, AsyncGenerator[str, None]]:
-    """
-    Wrapper sincrono per compatibilità. Gestisce correttamente l'event loop per Vercel.
-    """
-    # Per Vercel, usiamo un approccio che gestisce meglio l'event loop
-    if stream:
-        # Per lo streaming, restituiamo direttamente l'async generator
-        # Il chiamante dovrà gestirlo correttamente con async for
-        return ask_async(query, user_id, chat_history, stream, user_data, token)
-    else:
-        # Per le richieste non-stream, eseguiamo in modo sincrono
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+                    logger.error(f"Errore nel recuperare i dati utente: {e}")
+            
+            # Carica history da DB se richiesta
+            if chat_history:
+                try:
+                    history = get_data(
+                        DATABASE_NAME,
+                        COLLECTION_NAME,
+                        filters={"userId": user_id},
+                        limit=HISTORY_LIMIT,
+                    )
+                    for msg in history:
+                        if msg.get("human"):
+                            seed_messages.append(HumanMessage(msg["human"]))
+                        
+                        tool_entry = msg.get("tool")
+                        if tool_entry:
+                            try:
+                                tool_name = tool_entry.get("name") if isinstance(tool_entry, dict) else None
+                                tool_payload = tool_entry.get("result") if isinstance(tool_entry, dict) else tool_entry
+                                tool_text = json.dumps(tool_payload) if not isinstance(tool_payload, str) else tool_payload
+                                seed_messages.append(AIMessage(f"previous tool [{tool_name}] result : \n{tool_text}"))
+                            except Exception:
+                                pass
+                        
+                        if msg.get("system"):
+                            seed_messages.append(AIMessage(msg["system"]))
+                    
+                    if history:
+                        logger.info(f"HISTORY - Recuperati {len(history)} messaggi da DB")
+                except Exception as e:
+                    logger.error(f"Errore nel recuperare la chat history: {e}")
+            
+            # Aggiorna lo stato con i messaggi seed
+            if seed_messages:
+                try:
+                    await agent_executor.aupdate_state(config, {"messages": seed_messages})
+                except Exception as e:
+                    logger.error(f"Error seeding agent state: {e}")
         
-        return loop.run_until_complete(
-            ask_async(query, user_id, chat_history, stream, user_data, token)
-        )
+        tool_records = []
+        
+        # Streaming principale
+        try:
+            async for event in agent_executor.astream_events(
+                {"messages": [HumanMessage(query)]},
+                config=config,
+                version="v2",
+            ):
+                kind = event.get("event")
+                
+                if kind == "on_chat_model_stream":
+                    chunk = event["data"].get("chunk")
+                    if isinstance(chunk, AIMessageChunk):
+                        content_text = _extract_text(chunk.content)
+                        if content_text:
+                            response_chunks.append(content_text)
+                            yield f"data: {json.dumps({'data': content_text})}\n\n"
+                
+                elif kind in ("on_agent_finish", "on_chain_end"):
+                    data = event.get("data", {})
+                    final_output = data.get("output", {}) if isinstance(data, dict) else {}
+                    final_messages = final_output.get("messages", []) if isinstance(final_output, dict) else []
+                    
+                    logger.info(f"RUN - messages count={len(final_messages)}")
+                    
+                    # Raccoglie tool messages
+                    try:
+                        for m in final_messages:
+                            if isinstance(m, ToolMessage):
+                                tool_records.append({
+                                    "name": getattr(m, "name", None),
+                                    "result": m.content,
+                                })
+                    except Exception as e:
+                        logger.warning(f"Tool extraction error: {e}")
+                    
+                    # Ultimo contenuto se non già inviato
+                    if final_messages:
+                        last_msg = final_messages[-1]
+                        if isinstance(last_msg, AIMessage):
+                            content_text = _extract_text(last_msg.content)
+                            if content_text and not response_chunks:
+                                response_chunks.append(content_text)
+                                yield f"data: {json.dumps({'data': content_text})}\n\n"
+        
+        except Exception as e:
+            logger.error(f"Errore nello streaming: {e}")
+            yield f"data: {json.dumps({'error': f'Errore streaming: {str(e)}'})}\n\n"
+            return
+        
+        # Fallback per output dei tool se non c'è altro contenuto
+        if not response_chunks and tool_records:
+            try:
+                last_tool = tool_records[-1]
+                tool_result = last_tool.get("result")
+                tool_text = tool_result if isinstance(tool_result, str) else json.dumps(tool_result)
+                if tool_text:
+                    yield f"data: {json.dumps({'data': tool_text})}\n\n"
+                    response_chunks.append(tool_text)
+            except Exception as e:
+                logger.warning(f"Fallback tool failed: {e}")
+        
+        # Salva su database
+        response = "".join([c for c in response_chunks if c])
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logger.info(f"RUN TERMINATA: response_len={len(response)}")
+        
+        try:
+            data = {
+                "human": query,
+                "system": response,
+                "userId": user_id,
+                "timestamp": timestamp,
+            }
+            if tool_records:
+                data["tool"] = tool_records[-1]
+            
+            if response or data.get("tool"):
+                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
+                logger.info(f"DB - Dati salvati")
+        except Exception as e:
+            logger.error(f"DB - Errore salvataggio: {e}")
+        
+        # Segnala fine stream per Vercel
+        yield f"data: {json.dumps({'done': True})}\n\n"
+    
+    finally:
+        logger.info("Stream completato")

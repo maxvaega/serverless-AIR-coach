@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest
-from src.rag import ask, update_docs
+from src.rag import ask_stream, update_docs
 from src.s3_utils import create_prompt_file
 from src.env import is_production
 import uvicorn
@@ -44,35 +44,30 @@ async def stream_endpoint(
 ):
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
-        logger.info(f"Request received: \ntoken= {token}\nmessage= {request.message}\nuserid= {request.userid}")
-
-        # Con il nuovo codice, ask() con stream=True restituisce una coroutine
-        # che a sua volta restituisce un async generator
-        # Dobbiamo await la coroutine per ottenere l'async generator
-        async_generator = await ask(
+        logger.info(f"Request received: message={request.message}, userid={request.userid}")
+        
+        # Chiama direttamente la funzione di streaming
+        async_generator = ask_stream(
             request.message,
             request.userid,
             chat_history=True,
-            stream=True,
             user_data=True,
-            token=token  # Passa il token per l'autenticazione Auth0
+            token=token
         )
-
-        logger.info("Starting streaming response...")
-
-        # StreamingResponse gestirà automaticamente l'async generator
+        
         return StreamingResponse(
             async_generator,
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"  # Disabilita buffering per Nginx/Vercel
+                "X-Accel-Buffering": "no",
+                "Transfer-Encoding": "chunked"
             }
         )
-
+    
     except Exception as e:
-        logger.error(f"Exception occurred in /stream_query: {str(e)}")
+        logger.error(f"Exception in /stream_query: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @api_router.post("/update_docs")
