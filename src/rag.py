@@ -268,9 +268,6 @@ def ask(
 
             try:
                 # Stream solo il messaggio corrente; lo storico è nello state
-                buffer_pretool: list[str] = []
-                encountered_tool = False
-                allow_streaming_tokens = False
                 async for event in agent_executor.astream_events(
                     {"messages": [HumanMessage(query)]},
                     config=config,
@@ -278,29 +275,14 @@ def ask(
                 ):
                     kind = event.get("event")
 
-                    # Rilevazione tool start/end
-                    if isinstance(kind, str):
-                        lower_kind = kind.lower()
-                        if "on_tool" in lower_kind and ("start" in lower_kind):
-                            encountered_tool = True
-                            # scarta il buffer pre-tool (preamboli inutili)
-                            buffer_pretool = []
-                        elif "on_tool" in lower_kind and ("end" in lower_kind or "finish" in lower_kind):
-                            # da qui in poi streammiamo i token
-                            allow_streaming_tokens = True
-
                     if kind == "on_chat_model_stream":
                         chunk = event["data"].get("chunk")
                         if isinstance(chunk, AIMessageChunk):
                             content_text = _extract_text(chunk.content)
                             if content_text:
-                                if allow_streaming_tokens:
-                                    response_chunks.append(content_text)
-                                    data_dict = {"data": content_text}
-                                    yield f"data: {json.dumps(data_dict)}\n\n"
-                                else:
-                                    # Bufferizza finché non sappiamo se verrà usato un tool
-                                    buffer_pretool.append(content_text)
+                                response_chunks.append(content_text)
+                                data_dict = {"data": content_text}
+                                yield f"data: {json.dumps(data_dict)}\n\n"
 
                     elif kind in ("on_agent_finish", "on_chain_end"):
                         data = event.get("data", {})
@@ -327,19 +309,7 @@ def ask(
                             last_msg = final_messages[-1]
                             if isinstance(last_msg, AIMessage):
                                 content_text = _extract_text(last_msg.content)
-                                # Caso A: non c'è stato tool → flush del buffer pre-tool
-                                if content_text and not encountered_tool:
-                                    if buffer_pretool:
-                                        buffered = "".join(buffer_pretool)
-                                        response_chunks.append(buffered)
-                                        yield f"data: {json.dumps({'data': buffered})}\n\n"
-                                        buffer_pretool = []
-                                    # Evita doppio invio se content_text ripete il buffered
-                                    if not response_chunks or (response_chunks and response_chunks[-1] != content_text):
-                                        response_chunks.append(content_text)
-                                        yield f"data: {json.dumps({'data': content_text})}\n\n"
-                                # Caso B: c'è stato tool ma non abbiamo streammato nulla post-tool
-                                elif content_text and encountered_tool and not response_chunks:
+                                if content_text and not response_chunks:
                                     response_chunks.append(content_text)
                                     yield f"data: {json.dumps({'data': content_text})}\n\n"
 
