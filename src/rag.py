@@ -100,31 +100,6 @@ async def initialize_agent_async(force: bool = False) -> None:
             logger.error(f"Errore durante l'inizializzazione dell'agente: {e}")
             raise
 
-
-def initialize_agent(force: bool = False) -> None:
-    """
-    Wrapper sincrono per compatibilità con codice esistente.
-    """
-    try:
-        # Crea un nuovo event loop se necessario
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        loop.run_until_complete(initialize_agent_async(force))
-    except Exception as e:
-        logger.error(f"Initial agent initialization failed: {e}")
-
-
-# Inizializzazione lazy invece di eager per evitare problemi in serverless
-# L'inizializzazione avverrà al primo utilizzo
-
-
 # ------------------------------------------------------------------------------
 # API di modulo
 # ------------------------------------------------------------------------------
@@ -154,7 +129,12 @@ async def ask_stream(
     """
     # Inizializza l'agente se necessario
     if _agent_state["agent_executor"] is None:
-        await initialize_agent_async()
+        try:
+            await asyncio.wait_for(initialize_agent_async(), timeout=10.0)
+        except asyncio.TimeoutError:
+            logger.error("TIMEOUT durante inizializzazione agente")
+            yield f"data: {json.dumps({'error': 'Agent initialization timeout'})}\n\n"
+            return
     
     agent_executor = _agent_state["agent_executor"]
     response_chunks = []
