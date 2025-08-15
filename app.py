@@ -42,33 +42,59 @@ async def stream_endpoint(
     request: MessageRequest,
     auth_result: dict = Security(auth.verify)
 ):
+    logger.info("ENDPOINT START - Inizio elaborazione richiesta")
+    
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
         logger.info(f"Request received: message={request.message}, userid={request.userid}")
+        logger.info(f"Token presente: {bool(token)}")
         
-        # Chiama direttamente la funzione di streaming
-        async_generator = ask_stream(
-            request.message,
-            request.userid,
-            chat_history=True,
-            user_data=True,
-            token=token
-        )
+        logger.info("ENDPOINT - Prima di chiamare ask_stream")
         
-        return StreamingResponse(
-            async_generator,
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-                "Transfer-Encoding": "chunked"
-            }
-        )
+        # Verifica che ask_stream sia importata correttamente
+        logger.info(f"ask_stream function: {ask_stream}")
+        
+        try:
+            async_generator = ask_stream(
+                request.message,
+                request.userid,
+                chat_history=True,
+                user_data=True,
+                token=token
+            )
+            logger.info(f"ENDPOINT - ask_stream chiamata, generator: {type(async_generator)}")
+        except Exception as e:
+            logger.error(f"ERRORE nella chiamata ask_stream: {e}")
+            raise HTTPException(status_code=500, detail=f"Error calling ask_stream: {str(e)}")
+        
+        logger.info("ENDPOINT - Prima di creare StreamingResponse")
+        
+        try:
+            response = StreamingResponse(
+                async_generator,
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                    "Transfer-Encoding": "chunked"
+                }
+            )
+            logger.info("ENDPOINT - StreamingResponse creata con successo")
+            return response
+        except Exception as e:
+            logger.error(f"ERRORE nella creazione StreamingResponse: {e}")
+            raise HTTPException(status_code=500, detail=f"Error creating StreamingResponse: {str(e)}")
     
+    except HTTPException:
+        # Re-raise HTTPException
+        raise
     except Exception as e:
-        logger.error(f"Exception in /stream_query: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"ERRORE GENERALE nell'endpoint: {e}")
+        logger.error(f"Tipo errore: {type(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @api_router.post("/update_docs")
 async def update_docs_endpoint():

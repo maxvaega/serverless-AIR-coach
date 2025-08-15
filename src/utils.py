@@ -150,25 +150,29 @@ def update_docs_from_s3():
     Forza l'aggiornamento della cache dei documenti da S3.
     Questa funzione aggiorna la cache `_docs_cache` e restituisce i dati aggiornati.
     """
-    with update_docs_lock:
-        logger.info("Docs: manual update in progress...")
-        now = datetime.datetime.utcnow()
-        result = fetch_docs_from_s3()
-        _docs_cache["content"] = result["combined_docs"]
-        _docs_cache["docs_meta"] = result["docs_meta"]
-        _docs_cache["timestamp"] = now
-        logger.info("Docs Cache updated successfully.")
+    try:
+        with update_docs_lock:
+            logger.info("Docs: manual update in progress...")
+            now = datetime.datetime.utcnow()
+            result = fetch_docs_from_s3()
+            _docs_cache["content"] = result["combined_docs"]
+            _docs_cache["docs_meta"] = result["docs_meta"]
+            _docs_cache["timestamp"] = now
+            logger.info("Docs Cache updated successfully.")
 
-        # Prepara i dati da ritornare
-        docs_count = len(result["docs_meta"])
-        docs_details = result["docs_meta"]
+            # Prepara i dati da ritornare
+            docs_count = len(result["docs_meta"])
+            docs_details = result["docs_meta"]
 
-        # Costruisce un system_prompt temporaneo da ritornare, non modifica variabili globali
-        system_prompt = result["combined_docs"]
+            # Costruisce un system_prompt temporaneo da ritornare, non modifica variabili globali
+            system_prompt = result["combined_docs"]
 
-        return {
-            "message": "Document cache and system prompt updated successfully.",
-            "docs_count": docs_count,
-            "docs_details": docs_details,
-            "system_prompt": system_prompt
-        }
+            return {
+                "message": "Document cache and system prompt updated successfully.",
+                "docs_count": docs_count,
+                "docs_details": docs_details,
+                "system_prompt": system_prompt
+            }
+    except Exception as e:
+        logger.error(f"DOCS: impossibile recuperare i documenti da S3: {e}")
+        return None
