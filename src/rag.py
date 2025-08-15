@@ -25,8 +25,7 @@ HISTORY_LIMIT = 10
 combined_docs: str = ""
 system_prompt: str = ""
 llm: Optional[ChatGoogleGenerativeAI] = None  # non usare a livello globale in serverless
-# Checkpointer globale riutilizzabile (non legato all'event loop) per mantenere memoria volatile tra richieste
-checkpointer: Optional[InMemorySaver] = None
+checkpointer: Optional[InMemorySaver] = None  # non usare a livello globale in serverless
 agent_executor = None  # non usare a livello globale in serverless
 
 
@@ -73,17 +72,6 @@ def initialize_agent_state(force: bool = False) -> None:
             system_prompt = build_system_prompt(combined_docs)
     except Exception as e:
         logger.error(f"Errore durante l'inizializzazione dello stato agente: {e}")
-
-
-def _get_checkpointer() -> InMemorySaver:
-    """Ritorna un checkpointer condiviso a livello di processo (thread-safe best-effort).
-    InMemorySaver non dipende dall'event loop, quindi è sicuro riutilizzarlo tra richieste
-    per mantenere la memoria volatile dei thread (per `thread_id`).
-    """
-    global checkpointer
-    if checkpointer is None:
-        checkpointer = InMemorySaver()
-    return checkpointer
 
 
 # Evita inizializzazione eager di oggetti legati all'event loop in ambiente serverless.
@@ -133,7 +121,7 @@ def ask(
         temperature=0.7,
     )
     tools = [test_licenza]
-    local_checkpointer = _get_checkpointer()
+    local_checkpointer = InMemorySaver()
     agent_executor = create_react_agent(
         local_llm,
         tools,
