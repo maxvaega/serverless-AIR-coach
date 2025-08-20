@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest
-from src.rag import ask_stream, update_docs, initialize_agent_async
+from src.rag import ask, update_docs
 from src.s3_utils import create_prompt_file
 from src.env import is_production
 import uvicorn
@@ -42,59 +42,15 @@ async def stream_endpoint(
     request: MessageRequest,
     auth_result: dict = Security(auth.verify)
 ):
-    logger.info("ENDPOINT START - Inizio elaborazione richiesta")
-    
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
-        logger.info(f"Request received: message={request.message}, userid={request.userid}")
-        logger.info(f"Token presente: {bool(token)}")
-        
-        logger.info("ENDPOINT - Prima di chiamare ask_stream")
-        
-        # Verifica che ask_stream sia importata correttamente
-        logger.info(f"ask_stream function: {ask_stream}")
-        
-        try:
-            async_generator = ask_stream(
-                request.message,
-                request.userid,
-                chat_history=True,
-                user_data=True,
-                token=token
-            )
-            logger.info(f"ENDPOINT - ask_stream chiamata, generator: {type(async_generator)}")
-        except Exception as e:
-            logger.error(f"ERRORE nella chiamata ask_stream: {e}")
-            raise HTTPException(status_code=500, detail=f"Error calling ask_stream: {str(e)}")
-        
-        logger.info("ENDPOINT - Prima di creare StreamingResponse")
-        
-        try:
-            response = StreamingResponse(
-                async_generator,
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                    "Transfer-Encoding": "chunked"
-                }
-            )
-            logger.info("ENDPOINT - StreamingResponse creata con successo")
-            return response
-        except Exception as e:
-            logger.error(f"ERRORE nella creazione StreamingResponse: {e}")
-            raise HTTPException(status_code=500, detail=f"Error creating StreamingResponse: {str(e)}")
-    
-    except HTTPException:
-        # Re-raise HTTPException
-        raise
+        logger.info(f"Request received: \ntoken= {token}\nmessage= {request.message}\nuserid= {request.userid}")
+        stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
+        logger.info("Starting streaming response...")
+        return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
-        logger.error(f"ERRORE GENERALE nell'endpoint: {e}")
-        logger.error(f"Tipo errore: {type(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        logger.error(f"Exception occurred in /stream_query: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @api_router.post("/update_docs")
 async def update_docs_endpoint():
@@ -125,15 +81,6 @@ async def update_docs_endpoint():
     except Exception as e:
         logger.error(f"Exception occurred while updating docs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("STARTUP - Inizializzazione agente...")
-    try:
-        await initialize_agent_async()
-        logger.info("STARTUP - Agente inizializzato con successo")
-    except Exception as e:
-        logger.error(f"STARTUP - Errore inizializzazione agente: {e}")
 
 app.include_router(api_router) # for /api/ prefix
 

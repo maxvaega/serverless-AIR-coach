@@ -8,7 +8,7 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
 
 1. Autenticazione: L'endpoint `/api/stream_query` richiede autenticazione JWT tramite Auth0, validata dalla classe `VerifyToken` (src/auth.py).
 2. Ricezione Richiesta: Il payload deve essere conforme al modello `MessageRequest` (src/models.py).
-3. Agente LangGraph: l’agente è costruito per-request con `create_react_agent(model, tools, prompt=system_prompt, checkpointer=InMemorySaver())` per evitare riuso di oggetti legati all'event loop in ambienti serverless.
+3. Agente LangGraph: l’agente è costruito per-request con `create_react_agent(model, tools, prompt=system_prompt, checkpointer=InMemorySaver())` per evitare riuso di oggetti legati all'event loop in ambienti serverless. Il checkpointer è condiviso a livello di processo per mantenere la memoria volatile dei thread (`thread_id`) tra richieste finché il container resta caldo.
 4. Gestione Memoria Ibrida:
    - Si prepara `config={"configurable": {"thread_id": userid}}`.
    - Si legge lo stato del thread: se la memoria volatile contiene `messages`, la si usa direttamente.
@@ -73,8 +73,8 @@ app.py
 - Token Auth0 gestito e cacheato per ridurre chiamate ripetute.
 
 ### Persistenza Chat
-- Short-term: `InMemorySaver` (per istanza, volatile) con `thread_id`.
-- Long-term: MongoDB, con lettura/ricostruzione storia alla cold start serverless.
+- Short-term: `InMemorySaver` (volatile) condiviso a livello di processo con `thread_id` per persistere lo stato tra richieste nello stesso container caldo.
+- Long-term: MongoDB, con lettura/ricostruzione storia alla cold start o quando la memoria volatile del thread è assente.
 - Schema documento: `human` (domanda), `system` (risposta), `tool` (opzionale: dict o lista con `name` e `result`), `userId`, `timestamp`.
 
 ## Analisi dei Moduli/File
@@ -139,7 +139,8 @@ Per le variabili di ambiente, fare interamente riferimento al file `.env.example
 - Problema riscontrato: alla seconda richiesta consecutiva si verificava `Event loop is closed` durante lo streaming.
 - Soluzione adottata:
   - Inizializzazione lazy di `combined_docs` e `system_prompt` (no oggetti async all'import).
-  - Creazione dell'agente per-request: nuova istanza di modello, checkpointer `InMemorySaver` e `create_react_agent(...)` dentro `ask()`.
+  - Creazione dell'agente per-request: nuova istanza di modello e `create_react_agent(...)` dentro `ask()`.
+  - Checkpointer condiviso a livello di processo (`InMemorySaver`) per mantenere memoria volatile tra richieste (finché il container resta caldo).
   - Memoria: se lo stato volatile del thread è vuoto, si esegue il seed dei `messages` da MongoDB e si aggiorna lo stato con `update_state(config, {...})`.
   - Gestione errori: intercettato `RuntimeError` nello streaming per segnalare chiaramente la condizione di event loop non disponibile.
 
