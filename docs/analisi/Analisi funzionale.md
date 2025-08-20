@@ -1,12 +1,15 @@
 # Analisi del Codebase AIR Coach API
 
+# Analisi del Codebase AIR Coach API
+
 ## Panoramica Generale
 
-AIR Coach API è un'applicazione basata su FastAPI progettata per gestire interazioni con un chatbot intelligente. L'applicazione utilizza un agente LangGraph prebuilt (ReAct) con modello Gemini 2.0 di Google per generare risposte, con capacità di:
+AIR Coach API è un'applicazione basata su FastAPI progettata per gestire interazioni con un chatbot intelligente, deployata su ambiente serverless Vercel. L'applicazione utilizza un agente LangGraph prebuilt (ReAct) con modello Gemini 2.0 di Google per generare risposte, con capacità di:
 - caricare dinamicamente il contesto da file Markdown su AWS S3 (system prompt)
-- invocare tool applicativi
+- invocare tool applicativi con gestione streaming dei risultati
 - gestire memoria a breve termine tramite `InMemorySaver` (volatile, per istanza)
 - ibridare la memoria con la cronologia persistita su MongoDB (fallback serverless)
+- serializzare correttamente gli output dei tool per compatibilità JSON
 
 ## Struttura del Progetto
 
@@ -18,6 +21,7 @@ Il progetto è organizzato in diversi moduli:
 - src/env.py: Carica le variabili d'ambiente
 - src/logging_config.py: Configura il sistema di logging
 - src/models.py: Definisce i modelli Pydantic per la validazione dei dati
+- src/tools.py: Implementa i tool utilizzabili dall'agente LangGraph
 - src/test.py: Script per testare localmente le funzionalità
 
 ## Funzionalità Principali
@@ -26,19 +30,26 @@ Il progetto è organizzato in diversi moduli:
 
 L'applicazione carica dinamicamente il contesto per il modello LLM da file Markdown archiviati in un bucket AWS S3:
 
-- Caricamento iniziale: All’avvio dell’applicazione, i file Markdown vengono scaricati e combinati
+- Caricamento iniziale: All'avvio dell'applicazione, i file Markdown vengono scaricati e combinati
 - Caching: Il contenuto combinato viene memorizzato in cache per migliorare le prestazioni
-- Aggiornamento manuale: Un endpoint dedicato permette di forzare l’aggiornamento della cache
+- Aggiornamento manuale: Un endpoint dedicato permette di forzare l'aggiornamento della cache
 
 ### 2. Interazione con LangGraph (LLM + Tool + Memoria)
 
 - Agente: `create_react_agent` con `prompt=system_prompt` e `tools=[test_licenza]`.
 - Memoria (serverless‑friendly):
-  - Volatile: `InMemorySaver` (presente finché l’istanza è “calda”).
-  - Persistita: MongoDB (cronologia utente). Se la memoria volatile è assente, la cronologia viene letta da DB e “seedata” nella memoria volatile del thread.
+  - Volatile: `InMemorySaver` (presente finché l'istanza è "calda").
+  - Persistita: MongoDB (cronologia utente). Se la memoria volatile è assente, la cronologia viene letta da DB e "seedata" nella memoria volatile del thread.
 - `thread_id`: per utente (passato via `config`), un thread per utente.
-- Streaming: risposte in streaming asincrone (SSE).
-- Tool: il risultato dei tool viene reso disponibile al modello all’interno del turno corrente e salvato su DB al termine.
+- Streaming: risposte in streaming asincrone (SSE) con gestione separata di tool e messaggi AI.
+- Tool: il risultato dei tool viene streamato in tempo reale con serializzazione JSON-compatibile e salvato su DB al termine.
+
+### 3. Gestione Tool con Streaming
+
+- **Tool Execution**: I tool vengono eseguiti dall'agente e i loro risultati sono streamati in tempo reale
+- **Serializzazione**: Gli output dei tool (inclusi ToolMessage) vengono serializzati correttamente per compatibilità JSON
+- **Persistenza**: I risultati dei tool vengono salvati su MongoDB insieme alla conversazione
+- **History Management**: I tool storici vengono ricostruiti come ToolMessage durante il seeding della memoria
 
 ## Endpoint API
 
@@ -47,13 +58,16 @@ L'applicazione carica dinamicamente il contesto per il modello LLM da file Markd
 - Descrizione: Elabora una query e restituisce una risposta in streaming (SSE)
 - Parametri:
   - message: Il testo della query
-  - userid: L’ID dell’utente
+  - userid: L'ID dell'utente
 - Autenticazione: Richiede Bearer JWT (Auth0)
- - Persistenza: al termine del turno salva su MongoDB la tripletta `human`/`system`/`tool` (se presente). Il campo `tool` include nome tool e risultato.
+- Streaming Response:
+  - `{"type": "agent_message", "data": "testo"}`: Messaggi dell'agente AI
+  - `{"type": "tool_result", "tool_name": "nome", "data": {...}, "final": true}`: Risultati dei tool
+- Persistenza: al termine del turno salva su MongoDB la tripletta `human`/`system`/`tool` (se presente). Il campo `tool` include nome tool e risultato serializzato.
 
 ### 2. /api/update_docs
 - Metodo: POST
-- Descrizione: Forza l’aggiornamento della cache dei documenti da S3 e salva il system prompt su S3
+- Descrizione: Forza l'aggiornamento della cache dei documenti da S3 e salva il system prompt su S3
 - Autenticazione: Attualmente pubblico
 
 ## Autenticazione
@@ -64,15 +78,16 @@ L'applicazione carica dinamicamente il contesto per il modello LLM da file Markd
 ## Modelli di Dati
 
 ### MessageRequest
+```python
 class MessageRequest(BaseModel):
-- message: str
-- userid: str = Field(..., min_length = 1)
+    message: str
+    userid: str = Field(..., min_length=1)
 
 ### MessageResponse
 class MessageResponse(BaseModel):
-- query: str
-- result: str
-- userid: str = Field(..., min_length = 1)
+    query: str
+    result: str
+    userid: str = Field(..., min_length=1)
 
 ## Configurazione
 
@@ -94,8 +109,18 @@ Fare riferimento esclusivamente al file `.env.example` per l’elenco completo d
   - Si tenta di leggere la memoria volatile del thread (InMemorySaver) tramite `thread_id=userid`.
   - Se vuota (es. cold start serverless), si ricostruisce la cronologia dagli ultimi messaggi in MongoDB, inclusi eventuali risultati `tool`, e la si inserisce nella memoria volatile.
 - L’invocazione del turno passa solo il messaggio corrente; la memoria del thread fornisce lo storico.
-- L’agente può decidere di usare i tool e produce la risposta in streaming.
+- L'agente può decidere di usare i tool:
+  - Eventi on_tool_end catturano i risultati e li streamano come tool_result
+  - Eventi on_chat_model_stream streamano i messaggi AI come agent_message
 - A fine turno, si salva su MongoDB la tripletta `human`/`system`/`tool`.
+
+## Deployment
+L'applicazione è progettata per il deployment su Vercel Serverless Environment con le seguenti considerazioni:
+
+- Creazione dell'agente per-request per evitare problemi di event loop chiuso
+- Gestione memoria ibrida per persistenza tra cold start
+- Serializzazione JSON-compatibile per tutti gli output
+- Gestione ottimizzata delle risorse serverless
 
 ## Conclusioni
 

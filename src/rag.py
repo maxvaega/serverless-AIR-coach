@@ -59,6 +59,27 @@ def _extract_text(content) -> str:
         pass
     return ""
 
+def _serialize_tool_output(tool_output) -> dict:
+    """
+    Serializza l'output del tool in un formato JSON-compatibile.
+    """
+    try:
+        # Se è un ToolMessage, estrai il contenuto
+        if isinstance(tool_output, ToolMessage):
+            return {
+                "content": tool_output.content,
+                "tool_call_id": getattr(tool_output, 'tool_call_id', None)
+            }
+        # Se è già un dict o altro tipo serializzabile
+        elif isinstance(tool_output, (dict, list, str, int, float, bool)):
+            return tool_output
+        # Per altri tipi, converti in stringa
+        else:
+            return {"content": str(tool_output)}
+    except Exception as e:
+        logger.error(f"Errore nella serializzazione del tool output: {e}")
+        return {"content": str(tool_output), "error": "serialization_failed"}
+
 
 def initialize_agent_state(force: bool = False) -> None:
     """
@@ -243,12 +264,15 @@ def ask(
                             tool_entry = msg.get("tool")
                             if tool_entry:
                                 try:
-                                    tool_name = tool_entry.get("name") if isinstance(tool_entry, dict) else None
-                                    tool_payload = tool_entry.get("result") if isinstance(tool_entry, dict) else tool_entry
-                                    tool_text = json.dumps(tool_payload) if not isinstance(tool_payload, str) else tool_payload
-                                    seed_messages.append(AIMessage(f"previous tool [{tool_name}] result : \n{tool_text}"))
-                                except Exception:
-                                    pass
+                                    tool_name = tool_entry.get("name") if isinstance(tool_entry, dict) else "unknown_tool"
+                                    tool_result = tool_entry.get("result") if isinstance(tool_entry, dict) else tool_entry
+                                    tool_message = ToolMessage(
+                                        content=json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result,
+                                        tool_call_id=f"call_{tool_name}_{msg.get('timestamp', 'unknown')}"
+                                    )
+                                    seed_messages.append(tool_message)
+                                except Exception as te:
+                                    logger.error(f"Errore nella creazione del ToolMessage per il seeding: {te}")
 
                             if msg.get("system"):
                                 seed_messages.append(AIMessage(msg["system"]))
@@ -265,9 +289,14 @@ def ask(
                         logger.error(f"Error seeding agent state: {e}")
 
             tool_records = []
+            tool_executed = False
 
             try:
-                # Stream solo il messaggio corrente; lo storico è nello state
+                # Intercetta gli output del tool per classificarli usando le coppie evento : type seguenti
+                # On_tool_start (rimosso)
+                # On_tool_end : tool result
+                # On_chat_model_stream : agent_message
+
                 async for event in agent_executor.astream_events(
                     {"messages": [HumanMessage(query)]},
                     config=config,
@@ -275,86 +304,83 @@ def ask(
                 ):
                     kind = event.get("event")
 
-                    if kind == "on_chat_model_stream":
+                    # if kind == "on_tool_start":
+                    #     tool_name = event.get("name")
+                    #     tool_input = event.get("data", {}).get("input", {})
+
+                    #     start_message = {
+                    #         "type": "tool_start",
+                    #         "tool_name": tool_name,
+                    #         "input": tool_input
+                    #     }
+                    #     yield f"data: {json.dumps(start_message)}\n\n"
+                    #     logger.info(f"Tool {tool_name} started with input: {tool_input}")
+
+                    if kind == "on_tool_end":
+                        tool_executed = True
+                        tool_name = event.get("name")
+                        tool_data = event.get("data", {})
+                        tool_output = tool_data.get("output")
+
+                        if tool_output:
+                            # Serializza correttamente l'output del tool
+                            serialized_output = _serialize_tool_output(tool_output)
+
+                            tool_record = {
+                                "name": tool_name,
+                                "result": serialized_output
+                            }
+                            tool_records.append(tool_record)
+
+                            structured_response = {
+                                "type": "tool_result",
+                                "tool_name": tool_name,
+                                "data": serialized_output,
+                                "final": True
+                            }
+                            yield f"data: {json.dumps(structured_response)}\n\n"
+                            logger.info(f"Tool output processed: {tool_name}")
+                            # Non aggiungere ai response_chunks per evitare duplicazioni # Stopping agent execution.")
+                            # break
+
+                    elif kind == "on_chat_model_stream": #and not tool_executed:
                         chunk = event["data"].get("chunk")
                         if isinstance(chunk, AIMessageChunk):
                             content_text = _extract_text(chunk.content)
                             if content_text:
                                 response_chunks.append(content_text)
-                                data_dict = {"data": content_text}
-                                yield f"data: {json.dumps(data_dict)}\n\n"
+                                ai_response = {
+                                    "type": "agent_message",
+                                    "data": content_text
+                                }
+                                yield f"data: {json.dumps(ai_response)}\n\n"
 
-                    elif kind in ("on_agent_finish", "on_chain_end"):
-                        data = event.get("data", {})
-                        final_output = data.get("output", {}) if isinstance(data, dict) else {}
-                        final_messages = final_output.get("messages", []) if isinstance(final_output, dict) else []
-
-                        logger.info(
-                            f"RUN - final - messages count={len(final_messages)}; types={[type(m).__name__ for m in final_messages]}"
-                        )
-
-                        # Raccoglie ToolMessage prodotti nel run
-                        try:
-                            for m in final_messages:
-                                if isinstance(m, ToolMessage):
-                                    tool_records.append({
-                                        "name": getattr(m, "name", None),
-                                        "result": m.content,
-                                    })
-                        except Exception as e:
-                            logger.warning(f"Tool extraction error: {e}")
-
-                        # Ultimo contenuto assistente (se non già streammato)
-                        if final_messages:
-                            last_msg = final_messages[-1]
-                            if isinstance(last_msg, AIMessage):
-                                content_text = _extract_text(last_msg.content)
-                                if content_text and not response_chunks:
-                                    response_chunks.append(content_text)
-                                    yield f"data: {json.dumps({'data': content_text})}\n\n"
-
-            except RuntimeError as e:
-                # Tipico in serverless: event loop chiuso tra richieste
-                logger.error(f"Streaming RuntimeError: {e}")
-                yield f"data: {{'error': 'Errore nello streaming della risposta dell\\'agente: Event loop non disponibile'}}\n\n"
             except Exception as e:
-                logger.error(f"Errore nello streaming della risposta dell'agente: {e}")
-                yield f"data: {{'error': 'Errore nello streaming della risposta dell\\'agente: {str(e)}'}}\n\n"
+                logger.error(f"Errore nello streaming con controllo tool: {e}")
+                yield f"data: {{'error': 'Errore nello streaming: {str(e)}'}}\n\n"
 
-            # Fallback: se non c'è testo ma abbiamo tool_results, emetti ultimo tool
-            if not response_chunks and tool_records:
+            finally:
                 try:
-                    last_tool = tool_records[-1]
-                    tool_result = last_tool.get("result")
-                    tool_text = tool_result if isinstance(tool_result, str) else json.dumps(tool_result)
-                    if tool_text:
-                        yield f"data: {json.dumps({'data': tool_text})}\n\n"
-                        response_chunks.append(tool_text)
-                        logger.info("RUN - Risposta del tool emessa a causa di output dell'assistente vuoto")
+                    # Persistenza su DB a fine streaming
+                    response = "".join([c for c in response_chunks if c])
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    logger.info(f"RUN TERMINATA alle {timestamp}: response_len={len(response)} tool_records={len(tool_records)}")
+                    logger.info(f"\nRUN - Risposta:\n\n{response}")
+
+                    data = {
+                        "human": query,
+                        "system": response,
+                        "userId": user_id,
+                        "timestamp": timestamp,
+                    }
+                    if tool_records:
+                        data["tool"] = tool_records[-1]  # salva solo l'ultimo tool record
+
+                    if response or data.get("tool"):
+                        insert_data(DATABASE_NAME, COLLECTION_NAME, data)
+                        logger.info(f"DB - Risposta inserita nella collection: {COLLECTION_NAME} ")
+                        
                 except Exception as e:
-                    logger.warning(f"RUN - Fallback from tool failed: {e}")
-
-            # Persistenza su DB a fine streaming
-            response = "".join([c for c in response_chunks if c])
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logger.info(f"RUN TERMINATA alle {timestamp}: response_len={len(response)} tool_records={len(tool_records)}")
-            logger.info(f"\nRUN - Risposta:\n\n{response}")
-
-            try:
-                data = {
-                    "human": query,
-                    "system": response,
-                    "userId": user_id,
-                    "timestamp": timestamp,
-                }
-                if tool_records:
-                    data["tool"] = tool_records[-1]  # salva solo l'ultimo tool record
-
-                if response or data.get("tool"):
-                    insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                    logger.info(f"DB - Risposta inserita nella collection: {COLLECTION_NAME} ")
-            except Exception as e:
-                logger.error(f"DB - Errore nell'inserire i dati nella collection: {e}")
-                # Non inviare error al client dopo la chiusura dello stream
+                    logger.error(f"DB - Errore nell'inserire i dati nella collection: {e}")
 
         return stream_response()
