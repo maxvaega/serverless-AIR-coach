@@ -10,8 +10,6 @@ def _serialize_tool_output(tool_output) -> dict:
     Serializza l'output del tool in un formato JSON-compatibile.
     """
     try:
-
-        logger.info(f"TOOL - Serializing tool output of type {type(tool_output)}: {tool_output}")
         # Se è un ToolMessage, estrai il contenuto
         if isinstance(tool_output, ToolMessage):
             content = tool_output.content
@@ -21,10 +19,9 @@ def _serialize_tool_output(tool_output) -> dict:
                 if stripped.startswith("{") or stripped.startswith("["):
                     try:
                         content = json.loads(content)
-                        logger.info(f"TOOL - Serialized into json object: {content}")
                     except Exception:
                         # Se non è JSON valido, lascia la stringa così com'è
-                        logger.info(f"TOOL - Serialization failed - not a valid JSON: {content}")
+                        logger.warning(f"TOOL - Serialization failed - not a valid JSON: {content}")
                         pass
             return {
                 "content": content,
@@ -169,11 +166,10 @@ def test_licenza(capitolo: Optional[int] = None) -> dict:
 
     # Restituisce l'intera domanda in formato piatto
     logger.info(
-        "TOOL: Test licenza - Capitolo richiesto=%s, usato=%s, Domanda n.=%s:\n\n%s\n",
+        "TOOL: Test licenza - Capitolo richiesto=%s, usato=%s, Domanda n.=%s",
         str(capitolo),
         str(random_question.get("capitolo")),
         str(random_question.get("numero")),
-        str(random_question),
     )
     return random_question
 
