@@ -13,7 +13,7 @@ from .database import get_data, insert_data
 from .auth0 import get_user_metadata
 from .utils import format_user_metadata, get_combined_docs, update_docs_from_s3
 from .cache import get_cached_user_data, set_cached_user_data
-from .tools import test_licenza
+from .tools import test_licenza, _serialize_tool_output
 from .logging_config import logger
 
 
@@ -58,28 +58,6 @@ def _extract_text(content) -> str:
     except Exception:
         pass
     return ""
-
-def _serialize_tool_output(tool_output) -> dict:
-    """
-    Serializza l'output del tool in un formato JSON-compatibile.
-    """
-    try:
-        # Se è un ToolMessage, estrai il contenuto
-        if isinstance(tool_output, ToolMessage):
-            return {
-                "content": tool_output.content,
-                "tool_call_id": getattr(tool_output, 'tool_call_id', None)
-            }
-        # Se è già un dict o altro tipo serializzabile
-        elif isinstance(tool_output, (dict, list, str, int, float, bool)):
-            return tool_output
-        # Per altri tipi, converti in stringa
-        else:
-            return {"content": str(tool_output)}
-    except Exception as e:
-        logger.error(f"Errore nella serializzazione del tool output: {e}")
-        return {"content": str(tool_output), "error": "serialization_failed"}
-
 
 def initialize_agent_state(force: bool = False) -> None:
     """
@@ -215,6 +193,7 @@ def ask(
 
         async def stream_response():
             nonlocal response_chunks
+            serialized_output = None
 
             # Best practice: thread per utente
             config = {"configurable": {
@@ -319,7 +298,7 @@ def ask(
                         #     "input": tool_input
                         # }
                         # yield f"data: {json.dumps(start_message)}\n\n" 
-                        logger.info(f"Tool {tool_name} started with input: {tool_input}")
+                        logger.info(f"TOOL - {tool_name} started with input: {tool_input}")
 
                     elif kind == "on_tool_end":
                         tool_executed = True
@@ -332,8 +311,8 @@ def ask(
                             serialized_output = _serialize_tool_output(tool_output)
 
                             tool_record = {
-                                "name": tool_name,
-                                "result": serialized_output
+                                "tool_name": tool_name,
+                                "data": serialized_output
                             }
                             tool_records.append(tool_record)
 
@@ -344,7 +323,7 @@ def ask(
                                 "final": True
                             }
                             yield f"data: {json.dumps(structured_response)}\n\n"
-                            logger.info(f"Tool output processed: {tool_name}")
+                            logger.info(f"TOOL - {tool_name} output processed")
                             # Decommentare per assicurarsi una sola esecuzione del tool a livello programmatico
                             # break
 
@@ -370,9 +349,9 @@ def ask(
                     response = "".join([c for c in response_chunks if c])
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     logger.info(f"RUN TERMINATA alle {timestamp}: response_len={len(response)} tool_records={len(tool_records)}")
-                    logger.info(f"\nRUN - Risposta LLM:\n{response}")
-                    if serialized_output:
-                        logger.info(f"\nRUN - Risposta Tool:\n{serialized_output}")
+                    logger.info(f"RUN - Risposta LLM:\n{response}")
+                    if serialized_output is not None:
+                        logger.info(f"RUN - Risposta Tool:\n{serialized_output}")
 
                     data = {
                         "human": query,

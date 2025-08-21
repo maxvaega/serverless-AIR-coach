@@ -1,7 +1,52 @@
 import random
+import json
 from typing import Optional
 from langchain_core.tools import tool
+from langchain_core.messages import ToolMessage
 from .logging_config import logger
+
+def _serialize_tool_output(tool_output) -> dict:
+    """
+    Serializza l'output del tool in un formato JSON-compatibile.
+    """
+    try:
+
+        logger.info(f"TOOL - Serializing tool output of type {type(tool_output)}: {tool_output}")
+        # Se è un ToolMessage, estrai il contenuto
+        if isinstance(tool_output, ToolMessage):
+            content = tool_output.content
+            # Se il content è una stringa JSON, prova a deserializzarla in oggetto
+            if isinstance(content, str):
+                stripped = content.strip()
+                if stripped.startswith("{") or stripped.startswith("["):
+                    try:
+                        content = json.loads(content)
+                        logger.info(f"TOOL - Serialized into json object: {content}")
+                    except Exception:
+                        # Se non è JSON valido, lascia la stringa così com'è
+                        logger.info(f"TOOL - Serialization failed - not a valid JSON: {content}")
+                        pass
+            return {
+                "content": content,
+                "tool_call_id": getattr(tool_output, 'tool_call_id', None)
+            }
+        # Se è già un dict o altro tipo serializzabile
+        elif isinstance(tool_output, (dict, list, int, float, bool)):
+            return tool_output
+        elif isinstance(tool_output, str):
+            stripped = tool_output.strip()
+            if stripped.startswith("{") or stripped.startswith("["):
+                try:
+                    return json.loads(tool_output)
+                except Exception:
+                    return {"content": tool_output}
+            return {"content": tool_output}
+        # Per altri tipi, converti in stringa
+        else:
+            return {"content": str(tool_output)}
+    except Exception as e:
+        logger.error(f"Errore nella serializzazione del tool output: {e}")
+        return {"content": str(tool_output), "error": "serialization_failed"}
 
 # Nomi ufficiali dei capitoli disponibili
 CHAPTER_NAMES = {
