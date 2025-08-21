@@ -217,7 +217,11 @@ def ask(
             nonlocal response_chunks
 
             # Best practice: thread per utente
-            config = {"configurable": {"thread_id": str(user_id)}}
+            config = {"configurable": {
+                "thread_id": str(user_id),
+                "recursion_limit": 2
+                }
+            }
 
             # Memoria ibrida: volatile se presente, altrimenti seed da DB
             try:
@@ -304,19 +308,20 @@ def ask(
                 ):
                     kind = event.get("event")
 
-                    # if kind == "on_tool_start":
-                    #     tool_name = event.get("name")
-                    #     tool_input = event.get("data", {}).get("input", {})
+                    if kind == "on_tool_start":
+                        tool_name = event.get("name")
+                        tool_input = event.get("data", {}).get("input", {})
 
-                    #     start_message = {
-                    #         "type": "tool_start",
-                    #         "tool_name": tool_name,
-                    #         "input": tool_input
-                    #     }
-                    #     yield f"data: {json.dumps(start_message)}\n\n"
-                    #     logger.info(f"Tool {tool_name} started with input: {tool_input}")
+                        # decommentare per inviare il tool start al client
+                        # start_message = {
+                        #     "type": "tool_start",
+                        #     "tool_name": tool_name,
+                        #     "input": tool_input
+                        # }
+                        # yield f"data: {json.dumps(start_message)}\n\n" 
+                        logger.info(f"Tool {tool_name} started with input: {tool_input}")
 
-                    if kind == "on_tool_end":
+                    elif kind == "on_tool_end":
                         tool_executed = True
                         tool_name = event.get("name")
                         tool_data = event.get("data", {})
@@ -340,7 +345,7 @@ def ask(
                             }
                             yield f"data: {json.dumps(structured_response)}\n\n"
                             logger.info(f"Tool output processed: {tool_name}")
-                            # Non aggiungere ai response_chunks per evitare duplicazioni # Stopping agent execution.")
+                            # Decommentare per assicurarsi una sola esecuzione del tool a livello programmatico
                             # break
 
                     elif kind == "on_chat_model_stream": #and not tool_executed:
@@ -365,7 +370,9 @@ def ask(
                     response = "".join([c for c in response_chunks if c])
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     logger.info(f"RUN TERMINATA alle {timestamp}: response_len={len(response)} tool_records={len(tool_records)}")
-                    logger.info(f"\nRUN - Risposta:\n\n{response}")
+                    logger.info(f"\nRUN - Risposta LLM:\n{response}")
+                    if serialized_output:
+                        logger.info(f"\nRUN - Risposta Tool:\n{serialized_output}")
 
                     data = {
                         "human": query,

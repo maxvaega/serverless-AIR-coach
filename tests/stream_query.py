@@ -1,6 +1,7 @@
 import pytest
 import httpx
 import os
+import json
 from src.env import DATABASE_NAME, COLLECTION_NAME
 from src.database import get_collection
 
@@ -135,13 +136,33 @@ def test_stream_query_saves_tool_result():
         "accept": "application/json",
     }
 
-    # Esegue la chiamata in streaming e consuma completamente lo stream
+    # Esegue la chiamata in streaming, verifica che nello stream compaia un `tool_result`
+    # e poi consuma completamente lo stream per assicurare la persistenza su DB
     with httpx.Client(timeout=60) as client:
         with client.stream("POST", f"{API_URL}/stream_query", json=payload, headers=headers) as r:
             assert r.status_code == 200
-            # Consuma tutte le righe per assicurarsi che l'inserimento su DB sia avvenuto
-            for _ in r.iter_lines():
-                pass
+            saw_tool_result = False
+            saw_agent_message_after_tool = False
+            for line in r.iter_lines():
+                if not line:
+                    continue
+                if not str(line).startswith("data:"):
+                    continue
+                try:
+                    payload_str = str(line)[len("data:"):].strip()
+                    evt = json.loads(payload_str)
+                except Exception:
+                    continue
+                if evt.get("type") == "tool_result":
+                    saw_tool_result = True
+                elif evt.get("type") == "agent_message" and saw_tool_result:
+                    # Dopo un tool_result con return_direct non devono arrivare agent_message
+                    saw_agent_message_after_tool = True
+                # Consuma comunque tutto lo stream
+            # Verifica che abbiamo ricevuto un evento tool_result
+            assert saw_tool_result, "Nessun evento 'tool_result' ricevuto nello stream"
+            # Con tool return-direct non dovrebbero arrivare agent_message successivi
+            assert not saw_agent_message_after_tool, "Sono arrivati 'agent_message' dopo 'tool_result' (return-direct)"
 
     # Recupera l'ultimo documento per l'utente e verifica il campo 'tool'
     coll = get_collection(DATABASE_NAME, COLLECTION_NAME)

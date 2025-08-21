@@ -72,7 +72,7 @@ mock_db = [
     },
 ]
 
-@tool
+@tool(return_direct=True)
 def test_licenza(capitolo: Optional[int] = None) -> dict:
     """
     Scopo:

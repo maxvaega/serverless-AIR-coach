@@ -14,13 +14,16 @@ stato: sviluppati
   - Richiesta senza token → 403
   - Richiesta valida → 200 e presenza di linee SSE che iniziano con `data:`
   - Payload non valido → 422 (es. `userid` mancante) [richiede token valido]
-  - Richiesta che triggera un tool → viene salvato in MongoDB il campo `tool` con `name` e `result`
+  - Richiesta che triggera un tool →
+    - nello stream deve comparire un evento `tool_result` e, se il tool è `return_direct`, non devono comparire `agent_message` successivi
+    - viene salvato in MongoDB il campo `tool` con `name` e `result`
 - Dati:
   - `TEST_AUTH_TOKEN`: facoltativo. Se non impostato, i test che richiedono un token valido proveranno a generarlo automaticamente tramite `src.auth0.get_auth0_token()` (client credentials)
   - `userid`: parametrizzato (es. un `google-oauth2|...`)
   - `message`: parametrizzato
 - Note SSE:
   - I test consumano lo stream in modalità line-based per verificare correttamente i chunk SSE (`iter_lines`).
+  - Con tool marcati `return_direct` ci si aspetta che lo stream termini subito dopo l'evento `tool_result` senza ulteriori `agent_message`.
 
 ### 1.2. `/api/update_docs`
 - Obiettivo: verificare che l’aggiornamento dei documenti aggiorni la cache e il system prompt.
@@ -87,7 +90,7 @@ pytest -v -rs tests/
 pip install pytest httpx
 ```
 
-2) (Opzionale) Esporta un token JWT valido per i test che richiedono autenticazione:
+2) (Opzionale) Esporta un token JWT valido per i test che richiedono autenticazione. passaggio opzionale perchè lo script può generare il proprio token prima di simulare le chiamate:
 ```sh
 export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
 ```

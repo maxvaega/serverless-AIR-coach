@@ -18,9 +18,10 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
    - Se è vuota, si preleva la storia da MongoDB (ultimi N turni), si ricostruiscono `HumanMessage`/`AIMessage`/`ToolMessage` e, se presenti, i risultati tool storici come contesto, poi si effettua `update_state(config, {"messages": seed_messages})`.
 5. **Invocazione in streaming**: si invia solo il messaggio corrente (`{"messages": [HumanMessage(query)]}`), affidando lo storico al checkpointer.
 6. **Gestione Eventi Tool e AI**:
-   - Eventi `on_tool_end`: catturano risultati tool, li serializzano con `_serialize_tool_output()` e li streamano come `tool_result`
-   - Eventi `on_chat_model_stream`: streamano chunk di risposta AI come `agent_message`
-7. **Persistenza**: su MongoDB si salva la tripletta `human`/`system`/`tool` (se presente), insieme a `userId` e `timestamp`.
+   - Eventi `on_tool_end`: catturano risultati tool, li serializzano con `_serialize_tool_output()` e li streamano come `tool_result`.
+   - Se il tool è marcato come "return-direct" (vedi `src/tools.py`), l'agente termina l'esecuzione dopo `on_tool_end` e non vengono emessi `agent_message` successivi.
+   - Eventi `on_chat_model_stream`: streamano chunk di risposta AI come `agent_message` solo quando non è stato eseguito un tool return-direct.
+7. **Persistenza**: su MongoDB si salva la tripletta `human`/`system`/`tool` (se presente), insieme a `userId` e `timestamp`. In caso di tool return-direct, il campo `system` può essere vuoto e il risultato è rappresentato nel campo `tool`.
 
 ## Relazioni tra i File
 
@@ -114,7 +115,7 @@ app.py
 
 ### src/tools.py
 - Implementa i tool utilizzabili dall'agente LangGraph.
-- Tool disponibili: `test_licenza` per quiz interattivi.
+- Tool disponibili: `test_licenza` per quiz interattivi, marcato con `return_direct=True` per terminare la run subito dopo l'esecuzione e restituire direttamente l'output del tool nello stream.
 
 ### src/auth.py
 - Classe `VerifyToken`: verifica JWT Auth0 tramite PyJWT e JWKS.
@@ -191,15 +192,15 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 ### Architettura Tool
 - **Eventi monitorati**: `on_tool_end` per risultati tool, `on_chat_model_stream` per messaggi AI
 - **Serializzazione**: `_serialize_tool_output()` gestisce ToolMessage, dict, primitive e conversioni generiche
-- **Streaming**: Tool results streamati in tempo reale come eventi `tool_result`
+- **Streaming**: Tool results streamati in tempo reale come eventi `tool_result`. Per tool marcati `return_direct=True` lo stream si conclude dopo l'emissione del `tool_result`.
 - **Persistenza**: Tool records salvati su MongoDB con struttura normalizzata
 
 ### Flusso Tool
 1. Agente decide di invocare tool
 2. `on_tool_end` cattura risultato e lo serializza
-3. Risultato streamato come `{"type": "tool_result", "tool_name": "...", "data": {...}}`
+3. Risultato streamato come `{"type": "tool_result", "tool_name": "...", "data": {...}, "final": true}`
 4. Risultato salvato in `tool_records` per persistenza
-5. A fine conversazione, tool record salvato su MongoDB
+5. Se il tool è `return_direct`, l'agente termina l'elaborazione immediatamente dopo il `tool_result` e non vengono emessi ulteriori `agent_message`. Il salvataggio su MongoDB include il campo `tool` e, se non presente risposta testuale, un `system` eventualmente vuoto.
 
 ## Riferimenti ai file principali
 
