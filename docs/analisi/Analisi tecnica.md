@@ -1,11 +1,8 @@
-
-```markdown
-# /Users/user/Developer/serverless_aistruttore/docs/analisi/Analisi_tecnica.md
 # Analisi Tecnica dell'Architettura AIR Coach API
 
 ## Panoramica dell'Architettura
 
-L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata in FastAPI e **deployata su Vercel Serverless**, che integra autenticazione Auth0, gestione della cache, recupero dinamico di system prompt da file Markdown su AWS S3, interazione con LLM (Gemini 2.0 Flash), gestione tool con streaming e persistenza su MongoDB. L'architettura è modulare e separa chiaramente le responsabilità tra i componenti, ottimizzata per l'ambiente serverless.
+L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata in FastAPI e **deployata su Vercel Serverless**, che integra autenticazione Auth0, gestione della cache, recupero dinamico di system prompt da file Markdown su AWS S3, interazione con LLM (Gemini 2.5 Flash), gestione tool con streaming e persistenza su MongoDB. L'architettura è modulare e separa chiaramente le responsabilità tra i componenti, ottimizzata per l'ambiente serverless e **integrata con LangGraph per la gestione di agenti AI avanzati**.
 
 ## Flusso End-to-End: /stream_query
 
@@ -25,7 +22,6 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
 
 ## Relazioni tra i File
 
-
 ```
 app.py
 ├── src/models.py (MessageRequest, MessageResponse)
@@ -37,9 +33,10 @@ app.py
     ├── src/cache.py (cache user/token)
     └── src/utils.py (format_user_metadata)
 ├── src/database.py (get_data, insert_data, ensure_indexes)
+├── src/tools.py (test_licenza, domanda_teoria)
+├── src/services/database/ (QuizMongoDBService, MongoDBService)
 └── src/logging_config.py (logger)
 ```
-
 
 - **app.py**: Interfaccia principale tra client e logica di business, definisce gli endpoint FastAPI e la configurazione CORS.
 - **src/rag.py**: Gestione system prompt, interazione con LLM, recupero/salvataggio chat, aggiornamento documenti S3, serializzazione tool output.
@@ -50,9 +47,11 @@ app.py
 - **src/env.py**: Gestione variabili d'ambiente e configurazione.
 - **src/utils.py**: Utility per formattazione metadati e validazione user_id.
 - **src/models.py**: Modelli Pydantic per request/response.
-- **src/tools.py**: Implementazione dei tool utilizzabili dall'agente.
+- **src/tools.py**: **Implementazione dei tool utilizzabili dall'agente, incluso il tool domanda_teoria per la gestione dei quiz.**
+- **src/services/database/**: **Servizi specializzati per l'interazione con MongoDB, inclusi QuizMongoDBService per la gestione dei quiz.**
 - **src/logging_config.py**: Configurazione logging.
 - **src/test.py**: Script CLI per testare la funzione ask.
+- **tests/**: **Suite completa di test unitari e end-to-end per garantire la qualità del codice.**
 
 ## Autenticazione
 
@@ -84,6 +83,20 @@ app.py
   - `on_tool_end`: cattura risultati, serializza e streams come `tool_result`
   - Salvataggio: tool_records in MongoDB con struttura `{"name": str, "result": dict}`
 
+### **Gestione Quiz e Tool domanda_teoria**
+
+- **QuizMongoDBService**: Servizio specializzato per la gestione dei quiz con metodi:
+  - `get_random_question()`: Domanda casuale da tutto il database
+  - `get_random_question_by_field(field, value)`: Domanda casuale da un campo specifico
+  - `get_question_by_capitolo_and_number(capitolo, numero)`: Domanda specifica per capitolo e numero
+  - `search_questions_by_text(testo)`: Ricerca fuzzy case-insensitive nel testo delle domande
+
+- **Tool domanda_teoria**: Tool LangGraph che implementa:
+  - Validazione input (capitoli 1-10, testo minimo 3 caratteri)
+  - Logica di priorità parametri
+  - Gestione errori robusta
+  - Formato output consistente e strutturato
+
 ### Gestione Documenti S3 (src/rag.py)
 - Scarica e combina file Markdown da S3, aggiorna cache e system prompt.
 - Permette aggiornamento manuale tramite endpoint `/api/update_docs`.
@@ -114,8 +127,15 @@ app.py
 - **`create_prompt_file`**: salva system prompt su S3.
 
 ### src/tools.py
-- Implementa i tool utilizzabili dall'agente LangGraph.
-- Tool disponibili: `test_licenza` per quiz interattivi, marcato con `return_direct=True` per terminare la run subito dopo l'esecuzione e restituire direttamente l'output del tool nello stream.
+- **Implementa i tool utilizzabili dall'agente LangGraph.**
+- **Tool disponibili**:
+  - `test_licenza`: per quiz interattivi, marcato con `return_direct=True`
+  - **`domanda_teoria`: tool avanzato per la gestione dei quiz teorici con funzionalità di ricerca e validazione**
+
+### **src/services/database/**
+- **QuizMongoDBService**: Servizio specializzato per la gestione dei quiz con metodi ottimizzati per le operazioni richieste dal tool `domanda_teoria`
+- **MongoDBService**: Servizio generico per operazioni CRUD su MongoDB
+- **Interface**: Definizioni di interfacce per i servizi database
 
 ### src/auth.py
 - Classe `VerifyToken`: verifica JWT Auth0 tramite PyJWT e JWKS.
@@ -147,6 +167,40 @@ app.py
 ### src/test.py
 - Script CLI per testare la funzione `ask` da terminale.
 
+### **tests/**
+- **`tests/test_tools.py`**: Suite completa di test unitari per il tool `domanda_teoria` con mock completi
+- **`tests/stream_query.py`**: Test end-to-end per l'endpoint di streaming
+- **`tests/update_docs.py`**: Test end-to-end per l'aggiornamento documenti
+- **`tests/conftest.py`**: Configurazione pytest e setup ambiente di test
+
+## **Testing e Qualità del Codice**
+
+### **Architettura dei Test**
+- **Test Unitari**: Isolati dalle dipendenze esterne tramite mock completi
+- **Test End-to-End**: Verificano l'integrazione completa del sistema
+- **Mock Strategy**: Uso di `unittest.mock.Mock` e `patch` per isolare i componenti
+
+### **Suite di Test del Tool domanda_teoria**
+- **11 test** che coprono tutte le funzionalità
+- **Mock completi** per `QuizMongoDBService` e `MongoDBService`
+- **Test di validazione** per parametri di input
+- **Test di gestione errori** per scenari edge
+- **Test di formato output** per consistenza
+- **Test di priorità parametri** per logica di business
+
+### **Comandi di Test**
+```bash
+# Tutti i test
+pytest -v -rs tests/
+
+# Solo test unitari del tool
+pytest -v -rs tests/test_tools.py
+
+# Solo test E2E
+pytest -v -rs tests/stream_query.py
+pytest -v -rs tests/update_docs.py
+```
+
 ## Configurazione
 
 Per le variabili di ambiente, fare interamente riferimento al file `.env.example`.
@@ -165,6 +219,7 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 - **Serializzazione sicura**: Tutti gli output serializzati per compatibilità JSON
 - **Gestione stati**: Thread-safe per richieste concorrenti
 - **Resource cleanup**: Gestione corretta delle risorse in ambiente ephemeral
+- **Tool Integration**: I tool sono progettati per essere compatibili con l'ambiente serverless
 
 ### Considerazioni Finali
 
@@ -173,8 +228,9 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 - **Estendibilità**: Modularità elevata, facile aggiungere endpoint, tool o provider LLM.
 - **Persistenza**: Tutte le interazioni vengono salvate su MongoDB con serializzazione corretta.
 - **Prompt Dinamico**: Il system prompt può essere aggiornato senza riavviare il servizio, aggiornando i file su S3 e chiamando `/api/update_docs`.
-- **Tool Management**: Gestione completa dei tool con streaming in tempo reale e persistenza dei risultati.
+- **Tool Management**: **Gestione completa dei tool con streaming in tempo reale, persistenza dei risultati e tool specializzati per la gestione dei quiz.**
 - **Serverless Ready**: Architettura ottimizzata per Vercel con gestione corretta di event loop e memoria.
+- **Quality Assurance**: **Suite di test completa che garantisce la robustezza e manutenibilità del codice.**
 
 ## Gestione Event Loop in Ambiente Serverless
 
@@ -195,6 +251,14 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 - **Streaming**: Tool results streamati in tempo reale come eventi `tool_result`. Per tool marcati `return_direct=True` lo stream si conclude dopo l'emissione del `tool_result`.
 - **Persistenza**: Tool records salvati su MongoDB con struttura normalizzata
 
+### **Tool domanda_teoria - Architettura e Implementazione**
+- **Decoratore LangGraph**: `@tool` per integrazione con l'agente
+- **Validazione Input**: Controlli robusti sui parametri (capitoli 1-10, testo minimo 3 caratteri)
+- **Logica di Priorità**: Implementazione della gerarchia dei parametri per determinare l'operazione da eseguire
+- **Gestione Errori**: Gestione completa di tutti gli scenari di errore con messaggi informativi
+- **Formato Output**: Standardizzazione dell'output per consistenza e compatibilità
+- **Integrazione Database**: Utilizzo ottimizzato di `QuizMongoDBService` per le operazioni sui quiz
+
 ### Flusso Tool
 1. Agente decide di invocare tool
 2. `on_tool_end` cattura risultato e lo serializza
@@ -214,8 +278,10 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 - src/utils.py
 - src/models.py
 - src/tools.py
+- **src/services/database/**
 - src/logging_config.py
 - src/test.py
+- **tests/**
 
 ---
 

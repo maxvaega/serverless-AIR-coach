@@ -1,7 +1,6 @@
 import datetime
 import json
 from typing import AsyncGenerator, Optional, Union
-import asyncio
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, ToolMessage
@@ -13,7 +12,7 @@ from .database import get_data, insert_data
 from .auth0 import get_user_metadata
 from .utils import format_user_metadata, get_combined_docs, update_docs_from_s3
 from .cache import get_cached_user_data, set_cached_user_data
-from .tools import test_licenza, _serialize_tool_output
+from .tools import domanda_teoria, _serialize_tool_output
 from .logging_config import logger
 
 
@@ -131,7 +130,7 @@ def ask(
         model=model,
         temperature=0.7,
     )
-    tools = [test_licenza]
+    tools = [domanda_teoria]
     local_checkpointer = _get_checkpointer()
     agent_executor = create_react_agent(
         local_llm,

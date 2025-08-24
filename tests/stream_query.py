@@ -182,5 +182,5 @@ def test_stream_query_saves_tool_result():
         tool_item = tool_entry
 
     assert isinstance(tool_item, dict)
-    assert tool_item.get("name") == "test_licenza"
+    assert tool_item.get("name") == "domanda_teoria"
     assert tool_item.get("result") is not None

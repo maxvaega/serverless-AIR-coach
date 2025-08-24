@@ -1,6 +1,6 @@
-# AIR Coach API - v2.0
+# AIR Coach API - v2.2
 
-AIR Coach API is a FastAPI-based application designed for handling chatbot interactions.
+AIR Coach API is a FastAPI-based application designed for handling chatbot interactions with AI agents powered by LangGraph.
 
 ## Features
 
@@ -9,12 +9,15 @@ AIR Coach API is a FastAPI-based application designed for handling chatbot inter
 - **AWS S3 Context load**: dinamically loads context from .md files hosted in AWS S3
 - **User information**: reads data from auth0 to add to the LLM context window
 - **LLM Model**: Gemini 2.5 Flash
+- **LangGraph Integration**: AI agents with custom tools for quiz management
+- **Quiz Management Tool**: `domanda_teoria` tool for retrieving and searching quiz questions
 
 ## Requirements
 
 - Python 3.7+
 - FastAPI
 - Langchain
+- LangGraph
 - MongoDB
 - others
 
@@ -51,4 +54,22 @@ Enter the query:
 
 ## To run automatic testing
 
-see [docs/test.md](docs/test.md) for setup and usage with pytest.
+see [tests/readme.md](tests/readme.md) for setup and usage with pytest.
+
+### Quick Test Commands
+
+```sh
+# All tests
+pytest -v -rs tests/
+
+# Only unit tests for tools
+pytest -v -rs tests/test_tools.py
+
+# Only E2E tests
+pytest -v -rs tests/stream_query.py
+pytest -v -rs tests/update_docs.py
+```
+
+## Changelog
+
+- 2025/08: new tool domanda_teoria to output a json with questions from the db

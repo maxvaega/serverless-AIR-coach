@@ -1,8 +1,11 @@
 import random
 import json
 from typing import Optional
+# from winreg import QueryInfoKey
 from langchain_core.tools import tool
 from langchain_core.messages import ToolMessage
+
+from src.services.database.database_quiz_service import QuizMongoDBService
 from .logging_config import logger
 
 def _serialize_tool_output(tool_output) -> dict:
@@ -58,67 +61,11 @@ CHAPTER_NAMES = {
     9: "Procedure in situazioni di emergenza",
     10: "Normativa aeronautica attinente il paracadutismo",
 }
-# Mock database of questions (struttura piatta per facilità di lettura da parte dell'LLM)
-mock_db = [
-    {
-        "capitolo": 1,
-        "capitolo_nome": CHAPTER_NAMES[1],
-        "numero": 1,
-        "testo": "UNA ZONA CON PRESSIONE ATMOSFERICA DI 1030 HPA È CARATTERIZZATA DA:",
-        "opzioni": [
-            {"id": "A", "testo": "Maltempo"},
-            {"id": "B", "testo": "Vento forte"},
-            {"id": "C", "testo": "Bel tempo"},
-            {"id": "D", "testo": "Temporali"}
-        ],
-        "risposta_corretta": "C",
-    },
-    {
-        "capitolo": 1,
-        "capitolo_nome": CHAPTER_NAMES[1],
-        "numero": 2,
-        "testo": "UNA ZONA DI BASSA PRESSIONE È CARATTERIZZATA DA:",
-        "opzioni": [
-            {"id": "A", "testo": "In generale cattive condizioni meteorologiche"},
-            {"id": "B", "testo": "Nubi basse ed elevata pressione"},
-            {"id": "C", "testo": "In generale buone condizioni meteorologiche"},
-            {"id": "D", "testo": "Vento che soffia in senso orario"}
-        ],
-        "risposta_corretta": "A",
-    },
-    {
-        "capitolo": 2,
-        "capitolo_nome": CHAPTER_NAMES[2],
-        "numero": 13,
-        "testo": "QUAL È LA VELOCITÀ TERMINALE MEDIA, A 2.000 M DI QUOTA, DI UN PARACADUTISTA IN BOX POSITION (PIATTO), USCITO DALL'AEREO A 4000 M?",
-        "opzioni": [
-            {"id": "A", "testo": "Circa 30 m/s"},
-            {"id": "B", "testo": "Circa 50 m/s"},
-            {"id": "C", "testo": "Circa 75 m/s"},
-            {"id": "D", "testo": "Circa 100 m/s"}
-        ],
-        "risposta_corretta": "B",
-    },
-    {
-        "capitolo": 2,
-        "capitolo_nome": CHAPTER_NAMES[2],
-        "numero": 14,
-        "testo": "UNA POSIZIONE \"INCASSATA\" PERMETTE AD UN PARACADUTISTA DI DIMINUIRE LA PROPRIA VELOCITÀ IN CADUTA LIBERA, PERCHÉ:",
-        "opzioni": [
-            {"id": "A", "testo": "Aumenta la resistenza aerodinamica, modificando la forma e la superficie del proprio corpo"},
-            {"id": "B", "testo": "Il suo baricentro è posto più in alto"},
-            {"id": "C", "testo": "La forza di gravità aumenta"},
-            {"id": "D", "testo": "Spinge sull'aria con maggior forza"}
-        ],
-        "risposta_corretta": "A",
-    },
-]
-
 @tool(return_direct=True)
-def test_licenza(capitolo: Optional[int] = None) -> dict:
+def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None, testo: Optional[str] = None) -> dict:
     """
     Scopo:
-        Recupera una domanda d'esame casuale per i capitoli di teoria della licenza di paracadutismo.
+        Recupera una domanda d'esame per la simulazione dell'esame di teoria della licenza di paracadutismo.
 
     Quando usarlo:
         Usare SEMPRE questo tool quando l'utente chiede di fare/simulare/ripassare il quiz teorico
@@ -126,8 +73,16 @@ def test_licenza(capitolo: Optional[int] = None) -> dict:
 
     Input:
         capitolo: intero opzionale (1-10).
-                  - Se valorizzato: restituisce una domanda casuale dal capitolo indicato.
-                  - Se None: restituisce una domanda casuale da tutto il DB mockato.
+            - Se valorizzato: restituisce una domanda dal capitolo indicato.
+            - Se vuoto: restituisce una domanda da tutto il database.
+        
+        domanda: intero opzionale. Valorizzare solo se si valorizza anche capitolo.
+            - Se valorizzato: restituisce la domanda con il numero specificato, dal capitolo specificato.
+            - Se domanda è vuoto (e capitolo è valorizzato): restituisce una domanda casuale dal capitolo specificato.
+            - Se domanda è vuoto (e capitolo è vuoto): restituisce una domanda casuale da tutto il database.
+
+        testo: stringa opzionale. Utilizzare solo se si desidera filtrare le domande in base al testo. Se si utilizza testo, lasciare vuoti capitolo e domanda.
+
 
     Output (schema atteso):
         Un singolo dict con i seguenti campi (struttura piatta):
@@ -137,51 +92,76 @@ def test_licenza(capitolo: Optional[int] = None) -> dict:
         - 'testo': testo della domanda
         - 'opzioni': lista di dict con i campi 'id' e 'testo' per ogni opzione
         - 'risposta_corretta': lettera dell'opzione corretta
+"""
 
-    Note:
-        - Il modello NON deve modificare testo o opzioni. Deve limitarsi a presentare fedelmente in linguaggio naturale i contenuti restituiti.
-    """
+    try:
+        quiz = QuizMongoDBService()
+    except Exception as e:
+        logger.error(f"TOOL: domanda_teoria - Errore durante l'inizializzazione del servizio quiz: {e}")
+        return
 
-    #   - Nota: poiché il DB mock contiene solo i capitoli 1 e 2, se viene richiesto
-    #     un capitolo > 2, il tool utilizza il capitolo 2.
-    # Raggruppa le domande per capitolo nel mock DB piatto
-    chapters: dict[int, list[dict]] = {}
-    for item in mock_db:
-        chapter_num = int(item["capitolo"])  # già int
-        if chapter_num not in chapters:
-            chapters[chapter_num] = []
-        chapters[chapter_num].append(item)
+    logger.info(f"capitolo: {capitolo}, domanda: {domanda}")
 
-    if capitolo is not None:
-        # Normalizza il capitolo richiesto: se >2 (DB mock), usa 2
-        effective_chapter = 2 if capitolo > 2 else capitolo
-        # Se per qualche motivo il capitolo non esiste nel mock, fallback all'intero DB
-        if effective_chapter in chapters and chapters[effective_chapter]:
-            random_question = random.choice(chapters[effective_chapter])
+    try:
+        if testo is not None:
+            # Filtra le domande in base al testo
+            logger.info(f"TOOL: domanda_teoria - Ricerca per testo: {testo} ...")
+            
+            # Usa il metodo specifico per cercare domande per testo
+            questions = quiz.search_questions_by_text(testo)
+            
+            if questions and len(questions) > 0:
+                # Restituisci la prima domanda trovata
+                question = questions[0]
+                logger.info(f"TOOL: domanda_teoria - Domanda trovata per testo '{testo}': \n{question}")
+                return question
+            else:
+                logger.warning(f"TOOL: domanda_teoria - Nessuna domanda trovata per il testo: {testo}")
+                return {"error": f"Domanda teoria: Nessuna domanda trovata per il testo '{testo}'. Prova con parole diverse o più specifiche."}
+
+        if capitolo is not None:
+
+            if capitolo > 10 or capitolo < 1:
+                logger.warning(f"TOOL: domanda_teoria - capitolo numero {capitolo} inesistente, impossibile procedere")
+                return {"error": f"Domanda teoria: capitolo numero {capitolo} inesistente, riprovare con un capitolo da 1 a 10"}
+
+            if domanda is not None:
+                # Cerca una domanda specifica da un capitolo specifico
+                logger.info(f"TOOL: domanda_teoria - Capitolo richiesto={capitolo}, estraggo domanda richiesta={domanda} ...")
+                
+                # Usa il metodo specifico per ottenere la domanda
+                question = quiz.get_question_by_capitolo_and_number(capitolo=capitolo, numero=domanda)
+                
+                if question:
+                    logger.info(f"TOOL: domanda_teoria - Domanda specifica estratta: \n{question}")
+                    return question
+                else:
+                    logger.warning(f"TOOL: domanda_teoria - Nessuna domanda trovata per capitolo {capitolo}, numero {domanda}")
+                    return {"error": f"Domanda teoria: Domanda numero {domanda} non trovata nel capitolo {capitolo}."}
+            
+            else:
+                # Se viene specificato il capitolo ma non la domanda, restituisce una domanda casuale dal capitolo specificato
+                logger.info(f"TOOL: domanda_teoria - Capitolo richiesto={capitolo}, estraggo domanda casuale...")
+                question = quiz.get_random_question_by_field(field="capitolo", value=capitolo)
+                if question:
+                    logger.info(f"TOOL: domanda_teoria - Domanda casuale estratta: \n{question}")
+                    return question
+                else:
+                    logger.warning(f"TOOL: domanda_teoria - Nessuna domanda trovata per il capitolo {capitolo}")
+                    return {"error": f"Domanda teoria: Nessuna domanda trovata per il capitolo {capitolo}. per favore riprova tra poco"}
+
         else:
-            random_question = random.choice(mock_db)
-    else:
-        # Da tutto il DB mockato
-        random_question = random.choice(mock_db)
-
-    # Restituisce l'intera domanda in formato piatto
-    logger.info(
-        "TOOL: Test licenza - Capitolo richiesto=%s, usato=%s, Domanda n.=%s",
-        str(capitolo),
-        str(random_question.get("capitolo")),
-        str(random_question.get("numero")),
-    )
-    return random_question
-
-# @tool
-# def reperire_documentazione_air_coach(query: str) -> str:
-#     """
-#     Questo tool serve a rispondere a domande di carattere generale sull'attività di AIR Coach,
-#     sui corsi, sul paracadutismo e argomenti correlati.
-#     Utilizza la documentazione ufficiale per fornire risposte accurate.
-#     Da usare per tutte le domande che non riguardano la simulazione d'esame.
-#     """
-#     # This tool wraps the existing RAG functionality.
-#     # The 'query' parameter is implicitly used by the chain, but the main purpose
-#     # is to retrieve the context documents.
-#     return get_combined_docs()
+            # Se il capitolo non è specificato, restituisce una domanda casuale da tutto il DB
+            logger.info("TOOL: domanda_teoria - Estraggo domanda casuale da tutto il DB...")
+            question = quiz.get_random_question()
+            if question:
+                logger.info(f"TOOL: domanda_teoria - Domanda casuale estratta: \n{question}")
+                return question
+            else:
+                logger.warning("TOOL: domanda_teoria - Nessuna domanda trovata nel database")
+                return {"error": "Domanda teoria: Nessuna domanda trovata nel database"}
+        
+    except Exception as e:
+        logger.error(f"TOOL: domanda_teoria - Errore durante l'estrazione della domanda a db: {e} \nParametri= capitolo: {capitolo}\ndomanda: {domanda}\ntesto: {testo}")
+        return
+    
