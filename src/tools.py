@@ -24,7 +24,7 @@ def _serialize_tool_output(tool_output) -> dict:
                         content = json.loads(content)
                     except Exception:
                         # Se non è JSON valido, lascia la stringa così com'è
-                        logger.warning(f"TOOL - Serialization failed - not a valid JSON: {content}")
+                        logger.warning(f"TOOL - Serialization failed - not a valid JSON (or is it already a JSON?)")
                         pass
             return {
                 "content": content,
