@@ -100,7 +100,7 @@ def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None
         logger.error(f"TOOL: domanda_teoria - Errore durante l'inizializzazione del servizio quiz: {e}")
         return
 
-    logger.info(f"capitolo: {capitolo}, domanda: {domanda}")
+    # logger.info(f"capitolo: {capitolo}, domanda: {domanda}, testo: {testo}")
 
     try:
         if testo is not None:
