@@ -2,6 +2,7 @@ import pymongo
 import logging
 from typing import Dict, List, Optional, Any
 import uuid
+from bson import ObjectId
 
 from src.env import DATABASE_NAME, URI
 from src.services.database.interface import DatabaseInterface
@@ -16,6 +17,26 @@ class MongoDBService(DatabaseInterface):
         self.client = pymongo.MongoClient(URI)
         self.db = self.client[database_name]
 
+    def _to_json_safe(self, value: Any) -> Any:
+        """
+        Converte ricorsivamente l'oggetto in una struttura JSON-serializzabile.
+        - ObjectId -> str
+        - set/tuple -> list
+        - dict/list -> conversione ricorsiva
+        """
+        try:
+            if isinstance(value, ObjectId):
+                return str(value)
+            if isinstance(value, dict):
+                return {k: self._to_json_safe(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [self._to_json_safe(v) for v in value]
+            if isinstance(value, tuple) or isinstance(value, set):
+                return [self._to_json_safe(v) for v in value]
+            return value
+        except Exception:
+            return str(value)
+
     def get_item(self, collection: str, item_id: str) -> Optional[Dict[str, Any]]:
         """
         Get an item by ID from the specified collection.
@@ -27,7 +48,8 @@ class MongoDBService(DatabaseInterface):
         Returns:
             The item document, or None if not found.
         """
-        return self.db[collection].find_one({"_id": item_id})
+        doc = self.db[collection].find_one({"_id": item_id})
+        return self._to_json_safe(doc) if doc else None
     
     def get_items(self, collection: str, query: Dict[str, Any] = {}, limit: int = 0) -> List[Dict[str, Any]]:
         """
@@ -41,7 +63,8 @@ class MongoDBService(DatabaseInterface):
         Returns:
             A list of item documents that match the query.
         """
-        return list(self.db[collection].find(query).limit(limit)) if limit > 0 else list(self.db[collection].find(query))
+        results = list(self.db[collection].find(query).limit(limit)) if limit > 0 else list(self.db[collection].find(query))
+        return [self._to_json_safe(doc) for doc in results]
     
     def get_random_item(self, collection: str) -> Optional[Dict[str, Any]]:
         """
@@ -57,7 +80,8 @@ class MongoDBService(DatabaseInterface):
             items = list(self.db[collection].aggregate([
                 {"$sample": {"size": 1}}
             ]))
-            return items[0] if items else None
+            item = items[0] if items else None
+            return self._to_json_safe(item) if item else None
         except Exception as e:
             logger.error(f"Error getting random item from {collection}: {e}")
             return None
@@ -78,7 +102,8 @@ class MongoDBService(DatabaseInterface):
             {"$match": {field: value}},
             {"$sample": {"size": 1}}
         ]))
-        return items[0] if items else None
+        item = items[0] if items else None
+        return self._to_json_safe(item) if item else None
     
     def insert_item(self, collection: str, item: Dict[str, Any]) -> str:
         """

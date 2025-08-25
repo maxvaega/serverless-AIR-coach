@@ -283,6 +283,13 @@ class TestDomandaTeoria:
                 assert isinstance(opzione["id"], str)
                 assert isinstance(opzione["testo"], str)
 
+    def test_output_e_un_oggetto_non_stringa(self, mock_quiz_service):
+        """Test: Verifica esplicita che l'output sia un dict e non una stringa JSON."""
+        with patch('src.tools.QuizMongoDBService', return_value=mock_quiz_service):
+            result = domanda_teoria.invoke({"capitolo": 1})
+            assert result is not None
+            assert isinstance(result, dict), "L'output del tool deve essere un oggetto (dict), non una stringa"
+
     def test_priorita_parametri(self, mock_quiz_service):
         """Test: Verifica la priorità dei parametri."""
         with patch('src.tools.QuizMongoDBService', return_value=mock_quiz_service):

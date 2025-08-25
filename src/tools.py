@@ -48,6 +48,7 @@ def _serialize_tool_output(tool_output) -> dict:
         logger.error(f"Errore nella serializzazione del tool output: {e}")
         return {"content": str(tool_output), "error": "serialization_failed"}
 
+
 # Nomi ufficiali dei capitoli disponibili
 CHAPTER_NAMES = {
     1: "Meteorologia applicata al paracadutismo",

@@ -16,7 +16,7 @@ stato: sviluppati
   - Payload non valido → 422 (es. `userid` mancante) [richiede token valido]
   - Richiesta che triggera un tool →
     - nello stream deve comparire un evento `tool_result` e, se il tool è `return_direct`, non devono comparire `agent_message` successivi
-    - viene salvato in MongoDB il campo `tool` con `name` e `result`
+    - viene salvato in MongoDB il campo `tool` con struttura normalizzata `tool_name` e `data` (retrocompatibile con `name`/`result`)
 - Dati:
   - `TEST_AUTH_TOKEN`: facoltativo. Se non impostato, i test che richiedono un token valido proveranno a generarlo automaticamente tramite `src.auth0.get_auth0_token()` (client credentials)
   - `userid`: parametrizzato (es. un `google-oauth2|...`)
@@ -48,6 +48,7 @@ stato: parzialmente sviluppati
   - **Validazione input**: Controllo dei parametri (capitoli validi, testo minimo 3 caratteri)
   - **Gestione errori**: Gestione robusta di database vuoto, capitoli non validi, domande non trovate
   - **Formato output**: Verifica della consistenza e struttura dell'output
+  - Verifica esplicita che l'output sia un oggetto (dict) e non una stringa JSON
   - **Priorità parametri**: Verifica della logica di priorità tra i parametri di input
 - **File**: `tests/test_tools.py`
 - **Esecuzione**: `pytest -v -rs tests/test_tools.py`
@@ -83,7 +84,7 @@ Il tool `domanda_teoria` supporta i seguenti scenari di utilizzo, tutti testati 
 #### **6. Formato Output**
 - **Struttura consistente**: Tutti i campi richiesti sempre presenti
 - **Opzioni standardizzate**: Formato uniforme per le opzioni di risposta
-- **Compatibilità JSON**: Output sempre serializzabile
+- **Compatibilità JSON**: Output sempre serializzabile (grazie alla normalizzazione JSON-safe a livello di `MongoDBService`)
 
 ### 2.2. `src/rag.py`
 - ask: stream/non-stream, `user_data=True`, `chat_history=True`

@@ -182,5 +182,8 @@ def test_stream_query_saves_tool_result():
         tool_item = tool_entry
 
     assert isinstance(tool_item, dict)
-    assert tool_item.get("name") == "domanda_teoria"
-    assert tool_item.get("result") is not None
+    # Supporta sia schema vecchio (name/result) sia nuovo (tool_name/data)
+    name = tool_item.get("name") or tool_item.get("tool_name")
+    assert name == "domanda_teoria"
+    result = tool_item.get("result") or tool_item.get("data")
+    assert result is not None

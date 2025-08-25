@@ -105,10 +105,11 @@ app.py
 - Recupero metadati utente da Auth0 (`get_user_metadata`), formattazione (`format_user_metadata`), caching (`set_cached_user_data`, `get_cached_user_data`).
 - Token Auth0 gestito e cacheato per ridurre chiamate ripetute.
 
-### Persistenza Chat
+### Persistenza Chat e Normalizzazione DB
 - **Short-term**: `InMemorySaver` (volatile) condiviso a livello di processo con `thread_id` per persistere lo stato tra richieste nello stesso container caldo.
 - **Long-term**: MongoDB, con lettura/ricostruzione storia alla cold start o quando la memoria volatile del thread è assente.
-- **Schema documento**: `human` (domanda), `system` (risposta), `tool` (opzionale: dict con `name` e `result` serializzato), `userId`, `timestamp`.
+- **Normalizzazione DB**: `MongoDBService` converte tutti gli output letti dal DB in strutture JSON-serializzabili (es. `ObjectId` → `str`, `tuple/set` → `list`) a livello di servizio, così i consumer ricevono sempre oggetti JSON-safe.
+- **Schema documento**: `human` (domanda), `system` (risposta), `tool` (opzionale: dict con `tool_name` e `data` serializzato), `userId`, `timestamp`.
 
 ## Analisi dei Moduli/File
 
@@ -247,7 +248,7 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 
 ### Architettura Tool
 - **Eventi monitorati**: `on_tool_end` per risultati tool, `on_chat_model_stream` per messaggi AI
-- **Serializzazione**: `_serialize_tool_output()` gestisce ToolMessage, dict, primitive e conversioni generiche
+- **Serializzazione**: `_serialize_tool_output()` gestisce ToolMessage, dict, primitive e conversioni generiche. Con la normalizzazione a livello `MongoDBService`, i risultati del tool sono già JSON-safe.
 - **Streaming**: Tool results streamati in tempo reale come eventi `tool_result`. Per tool marcati `return_direct=True` lo stream si conclude dopo l'emissione del `tool_result`.
 - **Persistenza**: Tool records salvati su MongoDB con struttura normalizzata
 
@@ -262,7 +263,7 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 ### Flusso Tool
 1. Agente decide di invocare tool
 2. `on_tool_end` cattura risultato e lo serializza
-3. Risultato streamato come `{"type": "tool_result", "tool_name": "...", "data": {...}, "final": true}`
+3. Risultato streamato come `{"type": "tool_result", "tool_name": "...", "data": {...}, "final": true}` (dove `data.content` è un oggetto e non più una stringa JSON)
 4. Risultato salvato in `tool_records` per persistenza
 5. Se il tool è `return_direct`, l'agente termina l'elaborazione immediatamente dopo il `tool_result` e non vengono emessi ulteriori `agent_message`. Il salvataggio su MongoDB include il campo `tool` e, se non presente risposta testuale, un `system` eventualmente vuoto.
 
