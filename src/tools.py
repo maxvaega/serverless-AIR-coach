@@ -81,17 +81,17 @@ def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None
         1. Modalità SIMULAZIONE D'ESAME - DOMANDA CASUALE PER CAPITOLO (Caso d'uso principale)
            - Quando: L'utente vuole simulare l'esame, oppure una domanda casuale da un capitolo specifico.
            - Azione: Chiama il tool specificando SOLO il parametro `capitolo`.
-           - Esempio: domanda_teoria(capitolo=1)
+           - Esempio: (capitolo=1)
 
         2. Modalità DOMANDA SPECIFICA
            - Quando: L'utente chiede una domanda esatta specificando il capitolo e il numero (es. "la domanda 5 del capitolo 2").
            - Azione: Chiama il tool specificando SIA `capitolo` CHE `domanda`.
-           - Esempio: domanda_teoria(capitolo=2, domanda=5)
+           - Esempio: (capitolo=2, domanda=5)
 
         3. Modalità RICERCA PER ARGOMENTO O PER TESTO
            - Quando: L'utente vuole una domanda su un argomento specifico (es. "una domanda sulla quota di apertura") oppure conosce il testo della domanda.
            - Azione: Chiama il tool specificando SOLO il parametro `testo`. Lascia gli altri vuoti.
-           - Esempio: domanda_teoria(testo="quota di apertura")
+           - Esempio: (testo="quota di apertura")
 
     Output (Dati ricevuti dall'agente):
         Riceverai un dizionario JSON con i dati della domanda mostrata all'utente.
