@@ -257,8 +257,13 @@ def ask(
                     trimmed = trim_agent_messages(existing_messages or [], HISTORY_LIMIT)
                     post_len = len(trimmed)
                     if post_len < pre_len:
-                        agent_executor.update_state(config, {"messages": trimmed})
-                        logger.info(f"HISTORY - Trimming applicato: {pre_len} -> {post_len} messaggi")
+                        # Sostituisci interamente la history (update_state appende; set_state sostituisce)
+                        try:
+                            agent_executor.set_state(config, {"messages": trimmed})
+                        except Exception:
+                            # Fallback: se set_state non disponibile, prova comunque con update_state (potrebbe appendere)
+                            agent_executor.update_state(config, {"messages": trimmed})
+                        logger.info(f"HISTORY - Trimming applicato: {pre_len} -> {post_len} messaggi (target_limit={target_limit})")
                     else:
                         logger.debug(f"HISTORY - Trimming non necessario: finestra già coerente: {pre_len} messaggi")
                 except Exception as e:
@@ -284,7 +289,7 @@ def ask(
                         tool_name = event.get("name")
                         tool_input = event.get("data", {}).get("input", {})
 
-                        # decommentare per inviare il tool start al client
+                        # decommentare per inviare evento tool start al client
                         # start_message = {
                         #     "type": "tool_start",
                         #     "tool_name": tool_name,
@@ -357,7 +362,40 @@ def ask(
 
                     if response or data.get("tool"):
                         insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                        logger.info(f"DB - Risposta inserita nella collection: {COLLECTION_NAME} ")
+                        logger.info(f"DB - Risposta inserita nella collection: {DATABASE_NAME} - {COLLECTION_NAME} ")
+
+                    #### DEBUG ##
+                    # Log post-run: cronologia aggiornata nello stato del thread
+                    # try:
+                    #     state_after_run = agent_executor.get_state(config)
+                    #     msgs_after = state_after_run.values.get("messages") if state_after_run and hasattr(state_after_run, "values") else []
+                    #     total_msgs = len(msgs_after) if msgs_after else 0
+                    #     human_msgs = sum(1 for m in (msgs_after or []) if isinstance(m, HumanMessage))
+                    #     ai_msgs = sum(1 for m in (msgs_after or []) if isinstance(m, AIMessage))
+                    #     tool_msgs = sum(1 for m in (msgs_after or []) if isinstance(m, ToolMessage))
+                    #     logger.info(
+                    #         f"HISTORY - Stato dopo run: total={total_msgs} human={human_msgs} ai={ai_msgs} tool={tool_msgs}"
+                    #     )
+                    #     # Dettaglio ultimi 10 messaggi per debug
+                    #     tail = (msgs_after or [])[-10:]
+                    #     def _shorten(txt: str, max_len: int = 120) -> str:
+                    #         if txt is None:
+                    #             return ""
+                    #         return txt if len(txt) <= max_len else txt[:max_len] + "..."
+                    #     details = []
+                    #     for idx, m in enumerate(tail, start=max(0, total_msgs - len(tail))):
+                    #         if isinstance(m, HumanMessage):
+                    #             details.append(f"[{idx}] Human: {_shorten(m.content if isinstance(m.content, str) else str(m.content))}")
+                    #         elif isinstance(m, AIMessage):
+                    #             details.append(f"[{idx}] AI: {_shorten(m.content if isinstance(m.content, str) else str(m.content))}")
+                    #         elif isinstance(m, ToolMessage):
+                    #             details.append(f"[{idx}] Tool: {_shorten(m.content if isinstance(m.content, str) else str(m.content))}")
+                    #         else:
+                    #             details.append(f"[{idx}] {type(m).__name__}")
+                    #     if details:
+                    #         logger.debug("HISTORY DEBUG - Ultimi messaggi dopo run:\n" + "\n".join(details))
+                    # except Exception as e_hist:
+                    #     logger.error(f"HISTORY - Errore nel loggare lo stato dopo run: {e_hist}")
                         
                 except Exception as e:
                     logger.error(f"DB - Errore nell'inserire i dati nella collection: {e}")
