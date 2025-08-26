@@ -66,34 +66,43 @@ CHAPTER_NAMES = {
 def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None, testo: Optional[str] = None) -> dict:
     """
     Scopo:
-        Recupera una domanda d'esame per la simulazione dell'esame di teoria della licenza di paracadutismo.
+        Recupera e presenta all'utente una domanda d'esame per la teoria della licenza di paracadutismo.
+        Questo tool gestisce l'interfaccia del quiz; tu devi solo chiamarlo e, se necessario, commentare la risposta dell'utente.
 
     Quando usarlo:
-        Usare SEMPRE questo tool quando l'utente chiede di fare/simulare/ripassare il quiz teorico
-        o chiede domande a scelta multipla su uno o più capitoli.
+        Usare SEMPRE questo tool quando l'intento dell'utente è simulare un quiz d'esame, iniziarlo o continuarlo.
+        Trigger: "simuliamo quiz di esame", "fammi una domanda di teoria", "domanda sul capitolo 3", "domanda sulla VNE".
+        NON usare per rispondere a domande generiche sulla teoria.
 
-    Input:
-        capitolo: intero opzionale (1-10).
-            - Se valorizzato: restituisce una domanda dal capitolo indicato.
-            - Se vuoto: restituisce una domanda da tutto il database.
-        
-        domanda: intero opzionale. Valorizzare solo se si valorizza anche capitolo.
-            - Se valorizzato: restituisce la domanda con il numero specificato, dal capitolo specificato.
-            - Se domanda è vuoto (e capitolo è valorizzato): restituisce una domanda casuale dal capitolo specificato.
-            - Se domanda è vuoto (e capitolo è vuoto): restituisce una domanda casuale da tutto il database.
+    Modalità di Chiamata (Regole di Priorità):
+        Il tool ha 3 modalità di chiamata che sono MUTUALMENTE ESCLUSIVE.
+        Scegli UNA sola modalità in base alla richiesta dell'utente.
 
-        testo: stringa opzionale. Utilizzare solo se si desidera filtrare le domande in base al testo. Se si utilizza testo, lasciare vuoti capitolo e domanda.
+        1. Modalità SIMULAZIONE D'ESAME - DOMANDA CASUALE PER CAPITOLO (Caso d'uso principale)
+           - Quando: L'utente vuole simulare l'esame, oppure una domanda casuale da un capitolo specifico.
+           - Azione: Chiama il tool specificando SOLO il parametro `capitolo`.
+           - Esempio: domanda_teoria(capitolo=1)
 
+        2. Modalità DOMANDA SPECIFICA
+           - Quando: L'utente chiede una domanda esatta specificando il capitolo e il numero (es. "la domanda 5 del capitolo 2").
+           - Azione: Chiama il tool specificando SIA `capitolo` CHE `domanda`.
+           - Esempio: domanda_teoria(capitolo=2, domanda=5)
 
-    Output (schema atteso):
-        Un singolo dict con i seguenti campi (struttura piatta):
-        - 'capitolo': numero del capitolo
-        - 'capitolo_nome': nome del capitolo
-        - 'numero': numero della domanda
-        - 'testo': testo della domanda
-        - 'opzioni': lista di dict con i campi 'id' e 'testo' per ogni opzione
-        - 'risposta_corretta': lettera dell'opzione corretta
-"""
+        3. Modalità RICERCA PER ARGOMENTO O PER TESTO
+           - Quando: L'utente vuole una domanda su un argomento specifico (es. "una domanda sulla quota di apertura") oppure conosce il testo della domanda.
+           - Azione: Chiama il tool specificando SOLO il parametro `testo`. Lascia gli altri vuoti.
+           - Esempio: domanda_teoria(testo="quota di apertura")
+
+    Output (Dati ricevuti dall'agente):
+        Riceverai un dizionario JSON con i dati della domanda mostrata all'utente.
+        Usa 'risposta_corretta' per il tuo workflow logico.
+        - 'capitolo': (int) Numero del capitolo.
+        - 'capitolo_nome': (str) Nome del capitolo.
+        - 'numero': (int) Numero della domanda.
+        - 'testo': (str) Testo della domanda.
+        - 'opzioni': (list) Lista di opzioni, ciascuna con 'id' e 'testo'.
+        - 'risposta_corretta': (str) La lettera (es. 'C') che devi usare per verificare la risposta dell'utente.
+    """
 
     try:
         quiz = QuizMongoDBService()
