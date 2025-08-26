@@ -3,12 +3,12 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.logging_config import logger
 from src.models import MessageRequest
-from src.rag import ask, update_docs
+from src.rag import ask
+from src.update_docs import update_docs
 from src.s3_utils import create_prompt_file
 from src.env import is_production
 import uvicorn
 from src.auth import VerifyToken
-from fastapi import FastAPI, Security
 
 auth = VerifyToken()
 
@@ -44,7 +44,7 @@ async def stream_endpoint(
 ):
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
-        logger.info(f"Request received: \ntoken= {token}\nmessage= {request.message}\nuserid= {request.userid}")
+        logger.info(f"Request received: \ntoken_len= {len(token)}\nmessage= {request.message}\nuserid= {request.userid}")
         stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
         logger.info("Starting streaming response...")
         return StreamingResponse(stream_response, media_type="text/event-stream")

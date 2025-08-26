@@ -13,6 +13,7 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
    - Si prepara `config={"configurable": {"thread_id": userid}}`.
    - Si legge lo stato del thread: se la memoria volatile contiene `messages`, la si usa direttamente.
    - Se è vuota, si preleva la storia da MongoDB (ultimi N turni), si ricostruiscono `HumanMessage`/`AIMessage`/`ToolMessage` e, se presenti, i risultati tool storici come contesto, poi si effettua `update_state(config, {"messages": seed_messages})`.
+   - Coerenza warm/cold: in cold start la storia letta da DB è già limitata a `HISTORY_LIMIT`. In warm path, prima di ogni invocazione in streaming si applica il trimming della memoria volatile per mantenere solo gli ultimi `HISTORY_LIMIT` turni, preservando un eventuale `AIMessage` sentinella immediatamente precedente al primo turno mantenuto.
 5. **Invocazione in streaming**: si invia solo il messaggio corrente (`{"messages": [HumanMessage(query)]}`), affidando lo storico al checkpointer.
 6. **Gestione Eventi Tool e AI**:
    - Eventi `on_tool_end`: catturano risultati tool, li serializzano con `_serialize_tool_output()` e li streamano come `tool_result`.
@@ -106,7 +107,7 @@ app.py
 - Token Auth0 gestito e cacheato per ridurre chiamate ripetute.
 
 ### Persistenza Chat e Normalizzazione DB
-- **Short-term**: `InMemorySaver` (volatile) condiviso a livello di processo con `thread_id` per persistere lo stato tra richieste nello stesso container caldo.
+- **Short-term**: `InMemorySaver` (volatile) condiviso a livello di processo con `thread_id` per persistere lo stato tra richieste nello stesso container caldo. Prima di ogni run in streaming viene applicato un trimming coerente con `HISTORY_LIMIT` per evitare crescita incontrollata del contesto.
 - **Long-term**: MongoDB, con lettura/ricostruzione storia alla cold start o quando la memoria volatile del thread è assente.
 - **Normalizzazione DB**: `MongoDBService` converte tutti gli output letti dal DB in strutture JSON-serializzabili (es. `ObjectId` → `str`, `tuple/set` → `list`) a livello di servizio, così i consumer ricevono sempre oggetti JSON-safe.
 - **Schema documento**: `human` (domanda), `system` (risposta), `tool` (opzionale: dict con `tool_name` e `data` serializzato), `userId`, `timestamp`.

@@ -7,10 +7,10 @@ from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, Too
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
-from .env import FORCED_MODEL, DATABASE_NAME, COLLECTION_NAME
+from .env import FORCED_MODEL, DATABASE_NAME, COLLECTION_NAME, HISTORY_LIMIT
 from .database import get_data, insert_data
 from .auth0 import get_user_metadata
-from .utils import format_user_metadata, get_combined_docs, update_docs_from_s3
+from .utils import format_user_metadata, _extract_text, trim_agent_messages, get_combined_docs, build_system_prompt
 from .cache import get_cached_user_data, set_cached_user_data
 from .tools import domanda_teoria, _serialize_tool_output
 from .logging_config import logger
@@ -19,8 +19,6 @@ from .logging_config import logger
 # ------------------------------------------------------------------------------
 # Costanti e stato di modulo
 # ------------------------------------------------------------------------------
-HISTORY_LIMIT = 10
-
 combined_docs: str = ""
 system_prompt: str = ""
 llm: Optional[ChatGoogleGenerativeAI] = None  # non usare a livello globale in serverless
@@ -32,31 +30,6 @@ agent_executor = None  # non usare a livello globale in serverless
 # ------------------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------------------
-def build_system_prompt(docs: str) -> str:
-    """
-    Costruisce e restituisce il system_prompt utilizzando il contenuto combinato dei documenti.
-    """
-    return f"{docs}"
-
-
-def _extract_text(content) -> str:
-    """
-    Normalizza il contenuto dei messaggi AI in stringa.
-    """
-    try:
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            parts = []
-            for p in content:
-                if isinstance(p, dict):
-                    txt = p.get("text") or p.get("content")
-                    if isinstance(txt, str):
-                        parts.append(txt)
-            return "".join(parts)
-    except Exception:
-        pass
-    return ""
 
 def initialize_agent_state(force: bool = False) -> None:
     """
@@ -83,7 +56,6 @@ def _get_checkpointer() -> InMemorySaver:
         checkpointer = InMemorySaver()
     return checkpointer
 
-
 # Evita inizializzazione eager di oggetti legati all'event loop in ambiente serverless.
 # Inizializza solo il prompt/documenti al primo utilizzo.
 
@@ -91,20 +63,6 @@ def _get_checkpointer() -> InMemorySaver:
 # ------------------------------------------------------------------------------
 # API di modulo
 # ------------------------------------------------------------------------------
-def update_docs():
-    """
-    Wrapper per aggiornare i documenti su S3 e lo stato locale del modulo (combined_docs/system_prompt).
-    Non ricrea l'agente per mantenere il comportamento esistente.
-    """
-    global combined_docs, system_prompt
-    update_result = update_docs_from_s3()
-
-    if update_result and "system_prompt" in update_result:
-        combined_docs = update_result["system_prompt"]
-        system_prompt = build_system_prompt(combined_docs)
-        logger.info("System prompt aggiornato con successo.")
-
-    return update_result
 
 
 def ask(
@@ -212,7 +170,7 @@ def ask(
                 existing_messages = None
 
             if not existing_messages:
-                logger.info("HISTORY - Nessun messaggio trovato in memoria volatile, cerco cronologia conversazione su DB...")
+                logger.info("HISTORY - Nessun messaggio trovato in memoria volatile")
                 seed_messages = []
 
                 # Cold start: inject user info in volatile memory
@@ -232,6 +190,7 @@ def ask(
 
                 # Seed da DB se richiesto
                 if chat_history:
+                    logger.info("HISTORY - Cerco cronologia conversazione su DB...")
                     try:
                         history = get_data(
                             DATABASE_NAME,
@@ -246,13 +205,34 @@ def ask(
                             tool_entry = msg.get("tool")
                             if tool_entry:
                                 try:
-                                    tool_name = tool_entry.get("name") if isinstance(tool_entry, dict) else "unknown_tool"
-                                    tool_result = tool_entry.get("result") if isinstance(tool_entry, dict) else tool_entry
-                                    tool_message = ToolMessage(
-                                        content=json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result,
-                                        tool_call_id=f"call_{tool_name}_{msg.get('timestamp', 'unknown')}"
-                                    )
-                                    seed_messages.append(tool_message)
+                                    # Supporta sia schema vecchio (name/result) sia nuovo (tool_name/data) e anche lista di record
+                                    entry = None
+                                    if isinstance(tool_entry, list) and tool_entry:
+                                        entry = tool_entry[-1]
+                                    elif isinstance(tool_entry, dict):
+                                        entry = tool_entry
+
+                                    if isinstance(entry, dict):
+                                        tool_name = entry.get("name") or entry.get("tool_name") or "unknown_tool"
+                                        tool_result = entry.get("result") or entry.get("data")
+                                    else:
+                                        tool_name = "unknown_tool"
+                                        tool_result = tool_entry
+
+                                    if tool_result is None:
+                                        logger.debug("HISTORY DEBUG - tool_result assente, salto creazione ToolMessage")
+                                    else:
+                                        content_str = tool_result if isinstance(tool_result, str) else json.dumps(tool_result)
+                                        tool_message = ToolMessage(
+                                            content=content_str,
+                                            tool_call_id=f"call_{tool_name}_{msg.get('timestamp', 'unknown')}"
+                                        )
+                                        seed_messages.append(tool_message)
+                                        # LOGGER DEBUG
+                                        logger.info(
+                                            f"HISTORY DEBUG - ToolMessage aggiunto al seeding: tool={tool_name}, content_len={len(content_str)}"
+                                        )
+
                                 except Exception as te:
                                     logger.error(f"Errore nella creazione del ToolMessage per il seeding: {te}")
 
@@ -263,12 +243,26 @@ def ask(
                     except Exception as e:
                         logger.error(f"Errore nel recuperare la chat history: {e}")
 
-                # Aggiorna memoria volatile
+                # Aggiorna memoria volatile (nessun trimming necessario: il retrieve da DB è già limitato a HISTORY_LIMIT)
                 if seed_messages:
                     try:
                         agent_executor.update_state(config, {"messages": seed_messages})
                     except Exception as e:
                         logger.error(f"Error seeding agent state: {e}")
+            else:
+                # WARM PATH: trimming applicato solo quando i messaggi sono già presenti in memoria
+                logger.info("HISTORY - Memoria volatile presente (warm). Verifica e trimming se necessario...")
+                try:
+                    pre_len = len(existing_messages) if existing_messages else 0
+                    trimmed = trim_agent_messages(existing_messages or [], HISTORY_LIMIT)
+                    post_len = len(trimmed)
+                    if post_len < pre_len:
+                        agent_executor.update_state(config, {"messages": trimmed})
+                        logger.info(f"HISTORY - Trimming applicato: {pre_len} -> {post_len} messaggi")
+                    else:
+                        logger.debug(f"HISTORY - Trimming non necessario: finestra già coerente: {pre_len} messaggi")
+                except Exception as e:
+                    logger.error(f"TRIM - Errore durante applicazione trimming: {e}")
 
             tool_records = []
             tool_executed = False

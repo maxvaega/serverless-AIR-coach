@@ -143,7 +143,7 @@ def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None
                 question = quiz.get_question_by_capitolo_and_number(capitolo=capitolo, numero=domanda)
                 
                 if question:
-                    logger.info(f"TOOL: domanda_teoria - Domanda specifica estratta: \n{question}")
+                    logger.info(f"TOOL: domanda_teoria - Domanda {domanda} estratta dal capitolo {capitolo}: \n{question}")
                     return question
                 else:
                     logger.warning(f"TOOL: domanda_teoria - Nessuna domanda trovata per capitolo {capitolo}, numero {domanda}")
@@ -154,7 +154,7 @@ def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None
                 logger.info(f"TOOL: domanda_teoria - Capitolo richiesto={capitolo}, estraggo domanda casuale...")
                 question = quiz.get_random_question_by_field(field="capitolo", value=capitolo)
                 if question:
-                    logger.info(f"TOOL: domanda_teoria - Domanda casuale estratta: \n{question}")
+                    logger.info(f"TOOL: domanda_teoria - Domanda casuale estratta dal capitolo {capitolo}: \n{question}")
                     return question
                 else:
                     logger.warning(f"TOOL: domanda_teoria - Nessuna domanda trovata per il capitolo {capitolo}")

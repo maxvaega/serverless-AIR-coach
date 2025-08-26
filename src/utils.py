@@ -4,6 +4,7 @@ import re
 from .logging_config import logger
 import threading
 from .s3_utils import fetch_docs_from_s3
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 def format_user_metadata(user_metadata: Dict) -> str:
     """
@@ -145,6 +146,7 @@ def get_combined_docs():
         logger.info("Docs: found valid cache in use. no update triggered.")
     return _docs_cache["content"]
 
+
 def update_docs_from_s3():
     """
     Forza l'aggiornamento della cache dei documenti da S3.
@@ -172,3 +174,90 @@ def update_docs_from_s3():
             "docs_details": docs_details,
             "system_prompt": system_prompt
         }
+
+def build_system_prompt(docs: str) -> str:
+    """
+    Costruisce e restituisce il system_prompt utilizzando il contenuto combinato dei documenti.
+    """
+    return f"{docs}"
+
+
+def _extract_text(content) -> str:
+    """
+    Normalizza il contenuto dei messaggi AI in stringa.
+    """
+    try:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for p in content:
+                if isinstance(p, dict):
+                    txt = p.get("text") or p.get("content")
+                    if isinstance(txt, str):
+                        parts.append(txt)
+            return "".join(parts)
+    except Exception:
+        pass
+    return ""
+
+
+def trim_agent_messages(messages: list, history_limit: int) -> list:
+    """
+    Riduce i messaggi in memoria calda mantenendo solo gli ultimi `history_limit` turni
+    (dove un turno inizia con un HumanMessage e può includere 0..n ToolMessage e 0..1 AIMessage).
+
+    Regola speciale: se immediatamente prima del primo HumanMessage conservato c'è un AIMessage
+    (es. messaggio-profilo utente seedato durante cold start), viene preservato.
+
+    :param messages: Lista di messaggi nello stato volatile dell'agente.
+    :param history_limit: Numero massimo di turni (HumanMessage) da mantenere.
+    :return: Lista di messaggi eventualmente trimmata.
+    """
+    try:
+        if not messages:
+            logger.debug("TRIM - Nessun messaggio presente, nessuna azione.")
+            return messages
+
+        # Robustezza: forza history_limit a intero positivo
+        try:
+            history_limit = int(history_limit)
+        except Exception:
+            history_limit = 0
+
+        if history_limit <= 0:
+            logger.info("TRIM - history_limit non positivo: svuoto i messaggi.")
+            return []
+
+        human_indices = [idx for idx, m in enumerate(messages) if isinstance(m, HumanMessage)]
+        human_count = len(human_indices)
+
+        if human_count <= history_limit:
+            logger.debug(
+                f"TRIM - Nessun trimming necessario (humans={human_count} <= limit={history_limit})."
+            )
+            return messages
+
+        # Primo HumanMessage da conservare
+        start_human_idx = human_indices[-history_limit]
+        start_idx = start_human_idx
+
+        # Preserva un AIMessage immediatamente precedente (es. profilo utente)
+        if start_idx > 0 and isinstance(messages[start_idx - 1], AIMessage):
+            start_idx -= 1
+
+        trimmed = messages[start_idx:]
+
+        logger.info(
+            "TRIM - Applicato trimming memoria: "
+            f"tot={len(messages)} humans={human_count} limit={history_limit} "
+            f"start_idx={start_idx} result_len={len(trimmed)}"
+        )
+        logger.debug(
+            "TRIM - Tipi sequenza risultante: "
+            + ",".join(type(m).__name__ for m in trimmed)
+        )
+        return trimmed
+    except Exception as e:
+        logger.error(f"TRIM - Errore durante il trimming dei messaggi: {e}")
+        return messages

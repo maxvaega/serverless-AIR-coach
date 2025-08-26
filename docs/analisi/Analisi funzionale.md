@@ -43,6 +43,7 @@ L'applicazione carica dinamicamente il contesto per il modello LLM da file Markd
 - `thread_id`: per utente (passato via `config`), un thread per utente.
 - Streaming: risposte in streaming asincrone (SSE) con gestione separata di tool e messaggi AI.
 - Tool: il risultato dei tool viene streamato in tempo reale con serializzazione JSON-compatibile e salvato su DB al termine.
+ - Coerenza finestra conversazionale: in cold start la cronologia dal DB è già limitata a `HISTORY_LIMIT`. In warm path, prima di ogni invocazione in streaming la memoria volatile viene trimmata per mantenere solo gli ultimi `HISTORY_LIMIT` turni (HumanMessage + eventuali ToolMessage/AIMessage), preservando un eventuale `AIMessage` sentinella immediatamente precedente al primo turno mantenuto.
 
 ### 3. Gestione Tool con Streaming
 

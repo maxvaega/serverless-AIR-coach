@@ -1,4 +1,3 @@
-
 import os
 from dotenv import load_dotenv
 from functools import lru_cache
@@ -32,6 +31,9 @@ auth0_issuer = os.getenv("AUTH0_ISSUER", "https://your-auth0-domain/")
 auth0_algorithms = os.getenv("AUTH0_ALGORITHMS", "RS256").split(",")
 
 FORCED_MODEL = os.getenv("FORCED_MODEL") if os.getenv("FORCED_MODEL") else "models/gemini-2.5-flash"
+
+# Limite di messaggi da utilizzare nella chat history:
+HISTORY_LIMIT = int(os.getenv("HISTORY_LIMIT", 10))
 
 from pydantic import field_validator
 
