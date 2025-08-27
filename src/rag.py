@@ -10,7 +10,15 @@ from langgraph.checkpoint.memory import InMemorySaver
 from .env import FORCED_MODEL, DATABASE_NAME, COLLECTION_NAME, HISTORY_LIMIT
 from .database import get_data, insert_data
 from .auth0 import get_user_metadata
-from .utils import format_user_metadata, _extract_text, trim_agent_messages, get_combined_docs, build_system_prompt
+from .utils import (
+    format_user_metadata,
+    _extract_text,
+    trim_agent_messages,
+    get_combined_docs,
+    build_system_prompt,
+    ensure_prompt_initialized,
+    get_prompt_with_version,
+)
 from .cache import get_cached_user_data, set_cached_user_data
 from .tools import domanda_teoria, _serialize_tool_output
 from .logging_config import logger
@@ -39,8 +47,13 @@ def initialize_agent_state(force: bool = False) -> None:
     global combined_docs, system_prompt
 
     try:
+        # Inizializza il PromptManager process-global se necessario.
+        ensure_prompt_initialized()
+        # Aggiorna le variabili modulo per retro-compatibilità con il resto del file.
         if force or not combined_docs or not system_prompt:
             combined_docs = get_combined_docs()
+            # Nota: il vero system prompt usato dall'agente arriva dal PromptManager.
+            # Manteniamo anche la copia locale per compat.
             system_prompt = build_system_prompt(combined_docs)
     except Exception as e:
         logger.error(f"Errore durante l'inizializzazione dello stato agente: {e}")
@@ -90,10 +103,12 @@ def ask(
     )
     tools = [domanda_teoria]
     local_checkpointer = _get_checkpointer()
+    # Recupera il prompt e la sua versione corrente
+    current_prompt, prompt_version = get_prompt_with_version()
     agent_executor = create_react_agent(
         local_llm,
         tools,
-        prompt=system_prompt,
+        prompt=current_prompt,
         checkpointer=local_checkpointer,
     )
 
@@ -152,9 +167,9 @@ def ask(
             nonlocal response_chunks
             serialized_output = None
 
-            # Best practice: thread per utente
+            # Best practice: thread per utente, versionato sul prompt per isolamento memoria tra versioni
             config = {"configurable": {
-                "thread_id": str(user_id),
+                "thread_id": f"{str(user_id)}:v{prompt_version}",
                 "recursion_limit": 2
                 }
             }
@@ -263,7 +278,7 @@ def ask(
                         except Exception:
                             # Fallback: se set_state non disponibile, prova comunque con update_state (potrebbe appendere)
                             agent_executor.update_state(config, {"messages": trimmed})
-                        logger.info(f"HISTORY - Trimming applicato: {pre_len} -> {post_len} messaggi (target_limit={target_limit})")
+                        logger.info(f"HISTORY - Trimming applicato: {pre_len} -> {post_len} messaggi (target_limit={HISTORY_LIMIT})")
                     else:
                         logger.debug(f"HISTORY - Trimming non necessario: finestra già coerente: {pre_len} messaggi")
                 except Exception as e:

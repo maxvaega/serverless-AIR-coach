@@ -130,6 +130,70 @@ _docs_cache = {
 }
 update_docs_lock = threading.Lock()
 
+# ----------------------------------------------------------------------------
+# PromptManager (process-global) con versioning
+# ----------------------------------------------------------------------------
+_prompt_lock = threading.Lock()
+_current_system_prompt: str | None = None
+_prompt_version: int = 0
+
+def get_prompt() -> str:
+    global _current_system_prompt
+    return _current_system_prompt or ""
+
+def get_prompt_with_version() -> tuple[str, int]:
+    global _current_system_prompt, _prompt_version
+    return (get_prompt(), _prompt_version)
+
+def ensure_prompt_initialized() -> None:
+    """
+    Inizializza il system prompt process-global se non presente usando la cache docs.
+    Non effettua I/O se la cache è già popolata; altrimenti scarica da S3 via get_combined_docs().
+    """
+    global _current_system_prompt, _prompt_version
+    if _current_system_prompt:
+        return
+    with _prompt_lock:
+        if _current_system_prompt:
+            return
+        try:
+            docs = get_combined_docs()
+            _current_system_prompt = build_system_prompt(docs)
+            # Prima inizializzazione: versione 1
+            _prompt_version = 1
+            logger.info("PromptManager: system prompt inizializzato dalla cache docs (v1).")
+        except Exception as e:
+            logger.error(f"PromptManager: errore durante inizializzazione del prompt: {e}")
+
+def update_prompt_from_s3() -> dict:
+    """
+    Forza l'aggiornamento dei documenti da S3, ricostruisce il system prompt e
+    aggiorna il PromptManager incrementando la versione.
+
+    Ritorna un dict con message, docs_count, docs_details, system_prompt (finale).
+    """
+    global _current_system_prompt, _prompt_version
+    with _prompt_lock:
+        # Aggiorna la cache docs e ottieni combined_docs + meta
+        update = update_docs_from_s3()
+        # Back-compat: la funzione ritorna un campo "system_prompt" che è in realtà combined_docs
+        combined_docs = update.get("combined_docs") or update.get("system_prompt") or ""
+        # Costruisci il vero system prompt
+        new_prompt = build_system_prompt(combined_docs)
+        _current_system_prompt = new_prompt
+        _prompt_version = (_prompt_version or 0) + 1
+        logger.info(f"PromptManager: system prompt aggiornato (v{_prompt_version}).")
+        return {
+            "message": update.get("message", "Document cache and system prompt updated successfully."),
+            "docs_count": update.get("docs_count", 0),
+            "docs_details": update.get("docs_details", []),
+            # Ritorniamo il vero system prompt finale
+            "system_prompt": new_prompt,
+            # E per completezza, anche il combined_docs
+            "combined_docs": combined_docs,
+            "prompt_version": _prompt_version,
+        }
+
 def get_combined_docs():
     """
     Restituisce il contenuto combinato dei file Markdown usando la cache se disponibile.
@@ -165,14 +229,16 @@ def update_docs_from_s3():
         docs_count = len(result["docs_meta"])
         docs_details = result["docs_meta"]
 
-        # Costruisce un system_prompt temporaneo da ritornare, non modifica variabili globali
-        system_prompt = result["combined_docs"]
+        # Back-compat: manteniamo il campo legacy "system_prompt" per i consumer esistenti,
+        # ma ora aggiungiamo anche "combined_docs" esplicito.
+        system_prompt_legacy = result["combined_docs"]
 
         return {
             "message": "Document cache and system prompt updated successfully.",
             "docs_count": docs_count,
             "docs_details": docs_details,
-            "system_prompt": system_prompt
+            "system_prompt": system_prompt_legacy,
+            "combined_docs": result["combined_docs"],
         }
 
 def build_system_prompt(docs: str) -> str:

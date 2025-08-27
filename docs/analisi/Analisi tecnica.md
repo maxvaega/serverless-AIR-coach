@@ -8,9 +8,10 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
 
 1. **Autenticazione**: L'endpoint `/api/stream_query` richiede autenticazione JWT tramite Auth0, validata dalla classe `VerifyToken` (src/auth.py).
 2. **Ricezione Richiesta**: Il payload deve essere conforme al modello `MessageRequest` (src/models.py).
-3. **Agente LangGraph**: l'agente è costruito per-request con `create_react_agent(model, tools, prompt=system_prompt, checkpointer=InMemorySaver())` per evitare riuso di oggetti legati all'event loop in ambienti serverless. Il checkpointer è condiviso a livello di processo per mantenere la memoria volatile dei thread (`thread_id`) tra richieste finché il container resta caldo.
-4. **Gestione Memoria Ibrida**:
+3. **Agente LangGraph**: l'agente è costruito per-request con `create_react_agent(model, tools, prompt=current_prompt, checkpointer=InMemorySaver())`. Il `current_prompt` è fornito dal PromptManager process‑global (vedi sotto). Il checkpointer è condiviso a livello di processo per mantenere la memoria volatile dei thread tra richieste finché il container resta caldo.
+4. **Gestione Memoria Ibrida e Versioning Thread**:
    - Si prepara `config={"configurable": {"thread_id": userid}}`.
+   - Con il versioning del prompt, il thread è versionato: `thread_id = f"{userid}:v{prompt_version}"`. In questo modo la memoria volatile è isolata tra versioni del system prompt e non viene riutilizzata accidentalmente dopo un update.
    - Si legge lo stato del thread: se la memoria volatile contiene `messages`, la si usa direttamente.
    - Se è vuota, si preleva la storia da MongoDB (ultimi N turni), si ricostruiscono `HumanMessage`/`AIMessage`/`ToolMessage` e, se presenti, i risultati tool storici come contesto, poi si effettua `update_state(config, {"messages": seed_messages})`.
    - Coerenza warm/cold: in cold start la storia letta da DB è già limitata a `HISTORY_LIMIT`. In warm path, prima di ogni invocazione in streaming si applica il trimming della memoria volatile per mantenere solo gli ultimi `HISTORY_LIMIT` turni, preservando un eventuale `AIMessage` sentinella immediatamente precedente al primo turno mantenuto.
@@ -101,6 +102,30 @@ app.py
 ### Gestione Documenti S3 (src/rag.py)
 - Scarica e combina file Markdown da S3, aggiorna cache e system prompt.
 - Permette aggiornamento manuale tramite endpoint `/api/update_docs`.
+
+### PromptManager e Versioning del System Prompt
+- Il system prompt è gestito da un PromptManager process‑global in `src/utils.py` che mantiene:
+  - `current_system_prompt`: prompt corrente in memoria di processo
+  - `prompt_version`: intero incrementale che rappresenta la versione del prompt
+  - locking thread‑safe per aggiornamenti atomici
+- All'avvio/cold start, `ensure_prompt_initialized()` costruisce il prompt dai documenti in cache (`get_combined_docs()`), senza creare oggetti legati all'event loop.
+- Ad ogni chiamata di `ask()` viene letto `(prompt, version)` tramite `get_prompt_with_version()` e l'agente viene costruito per‑request usando quel prompt.
+- Il `thread_id` usato dal checkpointer è versionato (`{userid}:v{version}`) per isolare la memoria tra versioni diverse del prompt.
+
+### Aggiornamento Documenti e Prompt (`/api/update_docs`)
+- L'endpoint invoca `update_prompt_from_s3()` che:
+  - forza l'aggiornamento della cache dei documenti da S3 (contenuto combinato + metadati)
+  - ricostruisce il vero system prompt con `build_system_prompt(combined_docs)`
+  - effettua lo swap atomico del prompt corrente nel PromptManager e incrementa `prompt_version`
+- La risposta dell'endpoint include:
+  - `message`: esito dell'aggiornamento
+  - `docs_count`: numero di documenti
+  - `docs_details`: metadati dei documenti
+  - `system_prompt`: prompt finale costruito
+  - `combined_docs`: contenuto combinato (per trasparenza/debug)
+  - `prompt_version`: versione corrente del prompt dopo l'update
+
+Nota: la memoria volatile pre‑esistente per `thread_id` non viene cancellata ma diventa “isolata” perché le nuove esecuzioni usano un `thread_id` con versione aggiornata. Questo evita cross‑contamination fra prompt diversi e mantiene la compatibilità serverless.
 
 ### Gestione Utente e Cache
 - Recupero metadati utente da Auth0 (`get_user_metadata`), formattazione (`format_user_metadata`), caching (`set_cached_user_data`, `get_cached_user_data`).

@@ -45,6 +45,12 @@ L'applicazione carica dinamicamente il contesto per il modello LLM da file Markd
 - Tool: il risultato dei tool viene streamato in tempo reale con serializzazione JSON-compatibile e salvato su DB al termine.
  - Coerenza finestra conversazionale: in cold start la cronologia dal DB è già limitata a `HISTORY_LIMIT`. In warm path, prima di ogni invocazione in streaming la memoria volatile viene trimmata per mantenere solo gli ultimi `HISTORY_LIMIT` turni (HumanMessage + eventuali ToolMessage/AIMessage), preservando un eventuale `AIMessage` sentinella immediatamente precedente al primo turno mantenuto.
 
+### 2.b Gestione Funzionale del System Prompt (versionato)
+
+- Il system prompt dell'agente è gestito in modo centralizzato e versionato.
+- Quando il prompt viene aggiornato, le conversazioni successive utilizzano automaticamente la versione più recente, senza aumentare la latenza della richiesta.
+- La memoria conversazionale è isolata per versione del prompt: le nuove richieste proseguono su un contesto distinto rispetto alle versioni precedenti, evitando mescolamenti.
+
 ### 3. Gestione Tool con Streaming
 
 - **Tool Execution**: I tool vengono eseguiti dall'agente e i loro risultati sono streamati in tempo reale

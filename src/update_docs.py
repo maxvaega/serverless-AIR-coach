@@ -1,17 +1,18 @@
-from .utils import update_docs_from_s3, build_system_prompt
+from .utils import update_prompt_from_s3
 from .logging_config import logger
 
 def update_docs():
     """
-    Wrapper per aggiornare i documenti su S3 e lo stato locale del modulo (combined_docs/system_prompt).
-    Non ricrea l'agente per mantenere il comportamento esistente.
+    Aggiorna i documenti su S3, ricostruisce e imposta il system prompt process-global
+    tramite PromptManager, incrementando la versione.
+
+    Ritorna un dict con message, docs_count, docs_details, system_prompt (finale), combined_docs e prompt_version.
     """
-    global combined_docs, system_prompt
-    update_result = update_docs_from_s3()
-
-    if update_result and "system_prompt" in update_result:
-        combined_docs = update_result["system_prompt"]
-        system_prompt = build_system_prompt(combined_docs)
-        logger.info("System prompt aggiornato con successo.")
-
-    return update_result
+    try:
+        result = update_prompt_from_s3()
+        logger.info("Update docs: system prompt aggiornato e versione incrementata.")
+        return result
+    except Exception as e:
+        logger.error(f"Update docs: errore durante l'aggiornamento del prompt: {e}")
+        # Per coerenza, rilanciamo: l'endpoint gestirà l'HTTP 500
+        raise
