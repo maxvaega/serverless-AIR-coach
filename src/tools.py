@@ -75,20 +75,25 @@ def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None
         NON usare per rispondere a domande generiche sulla teoria.
 
     Modalità di Chiamata (Regole di Priorità):
-        Il tool ha 3 modalità di chiamata che sono MUTUALMENTE ESCLUSIVE.
+        Il tool ha 4 modalità di chiamata che sono MUTUALMENTE ESCLUSIVE.
         Scegli UNA sola modalità in base alla richiesta dell'utente.
 
-        1. Modalità SIMULAZIONE D'ESAME - DOMANDA CASUALE PER CAPITOLO (Caso d'uso principale)
-           - Quando: L'utente vuole simulare l'esame, oppure una domanda casuale da un capitolo specifico.
+        1. Modalità SIMULAZIONE D'ESAME - DOMANDA CASUALE (Caso d'uso principale)
+           - Quando: L'utente vuole simulare l'esame, oppure una domanda casuale.
+           - Azione: Chiama il tool senza specificare nessun parametro.
+           - Esempio: ()
+
+        2. Modalità DOMANDA CASUALE PER CAPITOLO
+           - Quando: L'utente vuole una domanda casuale da un capitolo specifico.
            - Azione: Chiama il tool specificando SOLO il parametro `capitolo`.
            - Esempio: (capitolo=1)
 
-        2. Modalità DOMANDA SPECIFICA
+        3. Modalità DOMANDA SPECIFICA
            - Quando: L'utente chiede una domanda esatta specificando il capitolo e il numero (es. "la domanda 5 del capitolo 2").
            - Azione: Chiama il tool specificando SIA `capitolo` CHE `domanda`.
            - Esempio: (capitolo=2, domanda=5)
 
-        3. Modalità RICERCA PER ARGOMENTO O PER TESTO
+        4. Modalità RICERCA PER ARGOMENTO O PER TESTO
            - Quando: L'utente vuole una domanda su un argomento specifico (es. "una domanda sulla quota di apertura") oppure conosce il testo della domanda.
            - Azione: Chiama il tool specificando SOLO il parametro `testo`. Lascia gli altri vuoti.
            - Esempio: (testo="quota di apertura")
