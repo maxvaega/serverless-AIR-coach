@@ -36,14 +36,14 @@ L'applicazione carica dinamicamente il contesto per il modello LLM da file Markd
 
 ### 2. Interazione con LangGraph (LLM + Tool + Memoria)
 
-- Agente: `create_react_agent` con `prompt=system_prompt` e `tools=[domanda_teoria]`.
+- Agente: `create_react_agent` con `prompt=personalized_prompt`, `pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT)` e `tools=[domanda_teoria]`.
 - Memoria (serverless‑friendly):
   - Volatile: `InMemorySaver` (presente finché l'istanza è "calda").
   - Persistita: MongoDB (cronologia utente). Se la memoria volatile è assente, la cronologia viene letta da DB e "seedata" nella memoria volatile del thread.
-- `thread_id`: per utente (passato via `config`), un thread per utente.
+- `thread_id`: per utente e versione di prompt (passato via `config`), un thread per utente per versione: `f"{userid}:v{prompt_version}"`.
 - Streaming: risposte in streaming asincrone (SSE) con gestione separata di tool e messaggi AI.
 - Tool: il risultato dei tool viene streamato in tempo reale con serializzazione JSON-compatibile e salvato su DB al termine.
- - Coerenza finestra conversazionale: in cold start la cronologia dal DB è già limitata a `HISTORY_LIMIT`. In warm path, prima di ogni invocazione in streaming la memoria volatile viene trimmata per mantenere solo gli ultimi `HISTORY_LIMIT` turni (HumanMessage + eventuali ToolMessage/AIMessage), preservando un eventuale `AIMessage` sentinella immediatamente precedente al primo turno mantenuto.
+- Coerenza finestra conversazionale: nessun trimming in warm path. In cold start si può limitare il seed da DB; la finestra passata all'LLM è limitata agli ultimi `HISTORY_LIMIT` turni via `pre_model_hook` che imposta `llm_input_messages` senza modificare `messages`.
 
 ### 2.b Gestione Funzionale del System Prompt (versionato)
 

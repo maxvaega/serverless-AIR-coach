@@ -7,10 +7,11 @@ AIR Coach API is a FastAPI-based application designed for handling chatbot inter
 - **Streaming Query Endpoint**: Handle query requests and stream responses
 - **Docs update Endpoint**: refreshes the docs in cache to updated the LLM context
 - **AWS S3 Context load**: dinamically loads context from .md files hosted in AWS S3
-- **User information**: reads data from auth0 to add to the LLM context window
+- **User information**: reads data from Auth0 and adds it to the system prompt (not as chat messages)
 - **LLM Model**: Gemini 2.5 Flash
 - **LangGraph Integration**: AI agents with custom tools for quiz management
 - **Quiz Management Tool**: `domanda_teoria` tool for retrieving and searching quiz questions
+ - **Rolling conversation window (pre_model_hook)**: the LLM only receives the last `HISTORY_LIMIT` turns; graph state `messages` is never trimmed
 
 ## Requirements
 
@@ -70,6 +71,14 @@ pytest -v -rs tests/stream_query.py
 pytest -v -rs tests/update_docs.py
 ```
 
+## LangGraph Agent Notes
+
+- The agent is created per-request with `create_react_agent(model, tools, prompt=personalized_prompt, pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT), checkpointer=InMemorySaver())`.
+- `personalized_prompt` concatenates user metadata into the system prompt each request; no `AIMessage` is added for user data.
+- `thread_id` is versioned per user and prompt version: `f"{userid}:v{prompt_version}"`.
+- No trimming on warm path. The rolling window is applied via `pre_model_hook` by setting `llm_input_messages`.
+
 ## Changelog
 
 - 2025/08: new tool domanda_teoria to output a json with questions from the db
+- 2025/09: rolling window via pre_model_hook, prompt personalization in system prompt, versioned thread_id, no trimming of graph state in warm path

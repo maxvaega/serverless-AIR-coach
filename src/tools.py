@@ -78,9 +78,9 @@ def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None
         Il tool ha 4 modalità di chiamata che sono MUTUALMENTE ESCLUSIVE.
         Scegli UNA sola modalità in base alla richiesta dell'utente.
 
-        1. Modalità SIMULAZIONE D'ESAME - DOMANDA CASUALE (Caso d'uso principale)
-           - Quando: L'utente vuole simulare l'esame, oppure una domanda casuale.
-           - Azione: Chiama il tool senza specificare nessun parametro.
+        1. Modalità DOMANDA CASUALE - SIMULAZIONE D'ESAME (Caso d'uso principale)
+           - Quando: L'utente vuole ripassare la teoria, simulare l'esame, oppure una domanda casuale.
+           - Azione: Chiama il tool senza fornire nessun parametro.
            - Esempio: ()
 
         2. Modalità DOMANDA CASUALE PER CAPITOLO
@@ -116,6 +116,14 @@ def domanda_teoria(capitolo: Optional[int] = None, domanda: Optional[int] = None
         return
 
     # logger.info(f"capitolo: {capitolo}, domanda: {domanda}, testo: {testo}")
+
+    # Normalizza input: tratta stringa vuota come assenza di valore
+    if isinstance(capitolo, str) and capitolo.strip() == "":
+        capitolo = None
+    if isinstance(domanda, str) and domanda.strip() == "":
+        domanda = None
+    if isinstance(testo, str) and testo.strip() == "":
+        testo = None
 
     try:
         if testo is not None:

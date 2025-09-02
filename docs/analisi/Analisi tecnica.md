@@ -8,14 +8,14 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot, sviluppata 
 
 1. **Autenticazione**: L'endpoint `/api/stream_query` richiede autenticazione JWT tramite Auth0, validata dalla classe `VerifyToken` (src/auth.py).
 2. **Ricezione Richiesta**: Il payload deve essere conforme al modello `MessageRequest` (src/models.py).
-3. **Agente LangGraph**: l'agente è costruito per-request con `create_react_agent(model, tools, prompt=current_prompt, checkpointer=InMemorySaver())`. Il `current_prompt` è fornito dal PromptManager process‑global (vedi sotto). Il checkpointer è condiviso a livello di processo per mantenere la memoria volatile dei thread tra richieste finché il container resta caldo.
+3. **Agente LangGraph**: l'agente è costruito per-request con `create_react_agent(model, tools, prompt=personalized_prompt, pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT), checkpointer=InMemorySaver())`. Il `personalized_prompt` deriva dal PromptManager (base prompt versionato) con sezione dati utente concatenata al system prompt. Il checkpointer è condiviso a livello di processo per mantenere la memoria volatile dei thread tra richieste finché il container resta caldo.
 4. **Gestione Memoria Ibrida e Versioning Thread**:
    - Si prepara `config={"configurable": {"thread_id": userid}}`.
    - Con il versioning del prompt, il thread è versionato: `thread_id = f"{userid}:v{prompt_version}"`. In questo modo la memoria volatile è isolata tra versioni del system prompt e non viene riutilizzata accidentalmente dopo un update.
    - Si legge lo stato del thread: se la memoria volatile contiene `messages`, la si usa direttamente.
    - Se è vuota, si preleva la storia da MongoDB (ultimi N turni), si ricostruiscono `HumanMessage`/`AIMessage`/`ToolMessage` e, se presenti, i risultati tool storici come contesto, poi si effettua `update_state(config, {"messages": seed_messages})`.
-   - Coerenza warm/cold: in cold start la storia letta da DB è già limitata a `HISTORY_LIMIT`. In warm path, prima di ogni invocazione in streaming si applica il trimming della memoria volatile per mantenere solo gli ultimi `HISTORY_LIMIT` turni, preservando un eventuale `AIMessage` sentinella immediatamente precedente al primo turno mantenuto.
-5. **Invocazione in streaming**: si invia solo il messaggio corrente (`{"messages": [HumanMessage(query)]}`), affidando lo storico al checkpointer.
+   - Coerenza warm/cold: in cold start la storia letta da DB può essere limitata; in warm path non viene applicato alcun trimming della memoria volatile. La finestra effettiva passata all'LLM è limitata agli ultimi `HISTORY_LIMIT` turni tramite `pre_model_hook` che imposta `llm_input_messages`, senza modificare lo stato `messages` del grafo.
+5. **Invocazione in streaming**: si invia solo il messaggio corrente (`{"messages": [HumanMessage(query)]}`), affidando lo storico al checkpointer; il `pre_model_hook` limita la finestra lato input modello.
 6. **Gestione Eventi Tool e AI**:
    - Eventi `on_tool_end`: catturano risultati tool, li serializzano con `_serialize_tool_output()` e li streamano come `tool_result`.
    - Se il tool è marcato come "return-direct" (vedi `src/tools.py`), l'agente termina l'esecuzione dopo `on_tool_end` e non vengono emessi `agent_message` successivi.
@@ -35,7 +35,7 @@ app.py
     ├── src/cache.py (cache user/token)
     └── src/utils.py (format_user_metadata)
 ├── src/database.py (get_data, insert_data, ensure_indexes)
-├── src/tools.py (test_licenza, domanda_teoria)
+├── src/tools.py (domanda_teoria)
 ├── src/services/database/ (QuizMongoDBService, MongoDBService)
 └── src/logging_config.py (logger)
 ```
@@ -109,8 +109,8 @@ app.py
   - `prompt_version`: intero incrementale che rappresenta la versione del prompt
   - locking thread‑safe per aggiornamenti atomici
 - All'avvio/cold start, `ensure_prompt_initialized()` costruisce il prompt dai documenti in cache (`get_combined_docs()`), senza creare oggetti legati all'event loop.
-- Ad ogni chiamata di `ask()` viene letto `(prompt, version)` tramite `get_prompt_with_version()` e l'agente viene costruito per‑request usando quel prompt.
-- Il `thread_id` usato dal checkpointer è versionato (`{userid}:v{version}`) per isolare la memoria tra versioni diverse del prompt.
+- Ad ogni chiamata di `ask()` viene letto `(prompt, version)` tramite `get_prompt_with_version()`, personalizzato con i dati utente e usato per costruire l'agente per‑request.
+- Il `thread_id` usato dal checkpointer è versionato (`{userid}:v{version}`) per isolare la memoria tra versioni diverse del prompt (1 thread per utente per versione).
 
 ### Aggiornamento Documenti e Prompt (`/api/update_docs`)
 - L'endpoint invoca `update_prompt_from_s3()` che:
@@ -132,7 +132,7 @@ Nota: la memoria volatile pre‑esistente per `thread_id` non viene cancellata m
 - Token Auth0 gestito e cacheato per ridurre chiamate ripetute.
 
 ### Persistenza Chat e Normalizzazione DB
-- **Short-term**: `InMemorySaver` (volatile) condiviso a livello di processo con `thread_id` per persistere lo stato tra richieste nello stesso container caldo. Prima di ogni run in streaming viene applicato un trimming coerente con `HISTORY_LIMIT` per evitare crescita incontrollata del contesto.
+- **Short-term**: `InMemorySaver` (volatile) condiviso a livello di processo con `thread_id` per persistere lo stato tra richieste nello stesso container caldo. Non si applica trimming in warm path; il limite per l'LLM viene applicato a runtime via `pre_model_hook`.
 - **Long-term**: MongoDB, con lettura/ricostruzione storia alla cold start o quando la memoria volatile del thread è assente.
 - **Normalizzazione DB**: `MongoDBService` converte tutti gli output letti dal DB in strutture JSON-serializzabili (es. `ObjectId` → `str`, `tuple/set` → `list`) a livello di servizio, così i consumer ricevono sempre oggetti JSON-safe.
 - **Schema documento**: `human` (domanda), `system` (risposta), `tool` (opzionale: dict con `tool_name` e `data` serializzato), `userId`, `timestamp`.
@@ -149,14 +149,13 @@ Nota: la memoria volatile pre‑esistente per `thread_id` non viene cancellata m
 ### src/rag.py
 - **Gestione system prompt e documenti S3** (fetch, cache, update).
 - **Agente LangGraph** creato per-request con `prompt` e `InMemorySaver` per evitare problemi di event loop chiuso su serverless.
-- **Funzione `ask`**: memoria ibrida (checkpointer volatile per thread + seed da MongoDB alla cold start), streaming SSE con gestione separata tool/AI, estrazione e serializzazione `ToolMessage`, persistenza tripletta `human/system/tool`.
+- **Funzione `ask`**: memoria ibrida (checkpointer volatile per thread + seed da MongoDB alla cold start), streaming SSE con gestione separata tool/AI, estrazione e serializzazione `ToolMessage`, persistenza tripletta `human/system/tool`. System prompt personalizzato con dati utente concatenati; nessun `AIMessage` dedicato ai dati utente.
 - **`_serialize_tool_output`**: serializza output tool per compatibilità JSON.
 - **`create_prompt_file`**: salva system prompt su S3.
 
 ### src/tools.py
 - **Implementa i tool utilizzabili dall'agente LangGraph.**
 - **Tool disponibili**:
-  - `test_licenza`: per quiz interattivi, marcato con `return_direct=True`
   - **`domanda_teoria`: tool avanzato per la gestione dei quiz teorici con funzionalità di ricerca e validazione**
 
 ### **src/services/database/**

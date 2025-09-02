@@ -13,7 +13,6 @@ from .auth0 import get_user_metadata
 from .utils import (
     format_user_metadata,
     _extract_text,
-    trim_agent_messages,
     get_combined_docs,
     build_system_prompt,
     ensure_prompt_initialized,
@@ -22,6 +21,11 @@ from .utils import (
 from .cache import get_cached_user_data, set_cached_user_data
 from .tools import domanda_teoria, _serialize_tool_output
 from .logging_config import logger
+from .history_hooks import build_llm_input_window_hook
+from .prompt_personalization import (
+    get_personalized_prompt_for_user,
+    generate_thread_id,
+)
 
 
 # ------------------------------------------------------------------------------
@@ -103,53 +107,50 @@ def ask(
     )
     tools = [domanda_teoria]
     local_checkpointer = _get_checkpointer()
-    # Recupera il prompt e la sua versione corrente
-    current_prompt, prompt_version = get_prompt_with_version()
+    # Prompt personalizzato per utente e versione
+    personalized_prompt, prompt_version, _ = get_personalized_prompt_for_user(
+        user_id=user_id, token=token, fetch_user_data=user_data
+    )
     agent_executor = create_react_agent(
         local_llm,
         tools,
-        prompt=current_prompt,
+        prompt=personalized_prompt,
+        pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT),
         checkpointer=local_checkpointer,
     )
 
     # Branch non-stream (sync)
     if not stream:
         try:
-            messages = []
-            user_info = None
-
-            if user_data:
-                try:
-                    user_info = get_cached_user_data(user_id)
-                    if not user_info:
-                        user_metadata = get_user_metadata(user_id, token=token)
-                        user_info = format_user_metadata(user_metadata)
-                        set_cached_user_data(user_id, user_info)
-                    if user_info:
-                        messages.append(AIMessage(user_info))
-                        logger.info(f"User info aggiunto ai messaggi: {user_info}")
-                except Exception as e:
-                    logger.error(f"Errore nel recuperare i dati dell'utente per l'ID {user_id}: {e}")
-                    return f"data: {{'error': 'Errore nel recuperare i dati dell\\'utente: {str(e)}'}}\n\n"
-
-            # Gestione manuale history
-            try:
-                if chat_history:
-                    history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=HISTORY_LIMIT)
-                    for msg in history:
-                        messages.append(HumanMessage(msg.get("human", "")))
-                        messages.append(AIMessage(msg.get("system", "")))
-                        logger.info(f"Chat history: {msg.get('human')} \n-> \n{msg.get('system')}")
-            except Exception as e:
-                logger.error(f"HISTORY - Errore nel recuperare la chat history: {e}")
-                return f"data: {{'error': 'Errore nel recuperare la chat history: {str(e)}'}}\n\n"
-
-            # Messaggio corrente
-            messages.append(HumanMessage(query))
-
             # Invocazione sincrona
             try:
-                result = agent_executor.invoke({"messages": messages})
+                # Thread id versionato per utente
+                config = {"configurable": {"thread_id": generate_thread_id(user_id, prompt_version), "recursion_limit": 2}}
+                # Cold start: seed da DB se necessario
+                state = None
+                try:
+                    state = agent_executor.get_state(config)
+                except Exception:
+                    pass
+                existing = state.values.get("messages") if state and hasattr(state, "values") else None
+                if not existing and chat_history:
+                    seed_messages = []
+                    try:
+                        history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=HISTORY_LIMIT)
+                        for msg in history:
+                            if msg.get("human"):
+                                seed_messages.append(HumanMessage(msg["human"]))
+                            if msg.get("system"):
+                                seed_messages.append(AIMessage(msg["system"]))
+                    except Exception as e:
+                        logger.error(f"HISTORY - Errore nel recuperare la chat history: {e}")
+                    if seed_messages:
+                        try:
+                            agent_executor.update_state(config, {"messages": seed_messages})
+                        except Exception as e:
+                            logger.error(f"Error seeding agent state: {e}")
+
+                result = agent_executor.invoke({"messages": [HumanMessage(query)]}, config=config)
                 final_response = result["messages"][-1].content
                 return final_response
             except Exception as e:
@@ -168,11 +169,7 @@ def ask(
             serialized_output = None
 
             # Best practice: thread per utente, versionato sul prompt per isolamento memoria tra versioni
-            config = {"configurable": {
-                "thread_id": f"{str(user_id)}:v{prompt_version}",
-                "recursion_limit": 2
-                }
-            }
+            config = {"configurable": {"thread_id": generate_thread_id(str(user_id), prompt_version), "recursion_limit": 2}}
 
             # Memoria ibrida: volatile se presente, altrimenti seed da DB
             try:
@@ -187,21 +184,6 @@ def ask(
             if not existing_messages:
                 logger.info("HISTORY - Nessun messaggio trovato in memoria volatile")
                 seed_messages = []
-
-                # Cold start: inject user info in volatile memory
-                if user_data:
-                    try:
-                        ui = get_cached_user_data(user_id)
-                        if not ui:
-                            user_metadata = get_user_metadata(user_id, token=token)
-                            ui = format_user_metadata(user_metadata)
-                            if ui:
-                                set_cached_user_data(user_id, ui)
-                        if ui:
-                            seed_messages.append(AIMessage(ui))
-                            logger.info("HISTORY / USER DATA - User info inserito nella memoria volatile del thread (cold start)")
-                    except Exception as e:
-                        logger.error(f"Errore nel recuperare i dati utente per cold start: {e}")
 
                 # Seed da DB se richiesto
                 if chat_history:
@@ -218,6 +200,10 @@ def ask(
                                 seed_messages.append(HumanMessage(msg["human"]))
 
                             tool_entry = msg.get("tool")
+                            
+                            if msg.get("system"):
+                                seed_messages.append(AIMessage(msg["system"]))
+                            
                             if tool_entry:
                                 try:
                                     # Supporta sia schema vecchio (name/result) sia nuovo (tool_name/data) e anche lista di record
@@ -251,38 +237,20 @@ def ask(
                                 except Exception as te:
                                     logger.error(f"Errore nella creazione del ToolMessage per il seeding: {te}")
 
-                            if msg.get("system"):
-                                seed_messages.append(AIMessage(msg["system"]))
                         if history:
                             logger.info(f"HISTORY - Cronologia recuperata da DB: {len(history)} messaggi")
                     except Exception as e:
                         logger.error(f"Errore nel recuperare la chat history: {e}")
 
-                # Aggiorna memoria volatile (nessun trimming necessario: il retrieve da DB è già limitato a HISTORY_LIMIT)
+                # Aggiorna memoria volatile (nessun trimming; pre_model_hook limiterà la finestra all'LLM)
                 if seed_messages:
                     try:
                         agent_executor.update_state(config, {"messages": seed_messages})
                     except Exception as e:
                         logger.error(f"Error seeding agent state: {e}")
             else:
-                # WARM PATH: trimming applicato solo quando i messaggi sono già presenti in memoria
-                logger.info("HISTORY - Memoria volatile presente (warm). Verifica e trimming se necessario...")
-                try:
-                    pre_len = len(existing_messages) if existing_messages else 0
-                    trimmed = trim_agent_messages(existing_messages or [], HISTORY_LIMIT)
-                    post_len = len(trimmed)
-                    if post_len < pre_len:
-                        # Sostituisci interamente la history (update_state appende; set_state sostituisce)
-                        try:
-                            agent_executor.set_state(config, {"messages": trimmed})
-                        except Exception:
-                            # Fallback: se set_state non disponibile, prova comunque con update_state (potrebbe appendere)
-                            agent_executor.update_state(config, {"messages": trimmed})
-                        logger.info(f"HISTORY - Trimming applicato: {pre_len} -> {post_len} messaggi (target_limit={HISTORY_LIMIT})")
-                    else:
-                        logger.debug(f"HISTORY - Trimming non necessario: finestra già coerente: {pre_len} messaggi")
-                except Exception as e:
-                    logger.error(f"TRIM - Errore durante applicazione trimming: {e}")
+                # WARM PATH: nessun trimming; lo stato rimane completo
+                logger.info("HISTORY - Memoria volatile presente (warm).")
 
             tool_records = []
             tool_executed = False
@@ -360,11 +328,24 @@ def ask(
                 try:
                     # Persistenza su DB a fine streaming
                     response = "".join([c for c in response_chunks if c])
+                    
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     logger.info(f"RUN TERMINATA alle {timestamp}: response_len={len(response)} tool_records={len(tool_records)}")
                     logger.info(f"RUN - Risposta LLM:\n{response}")
                     if serialized_output is not None:
                         logger.info(f"RUN - Risposta Tool:\n{serialized_output}")
+
+                    # Se l'agente non ha prodotto risposta e non ha chiamato alcun tool,
+                    # invia uno spazio al frontend e registra un warning
+                    if (not response or response == "") and (not tool_executed):
+                        logger.warning("STREAM - Nessuna risposta dall'agente e nessun tool eseguito. Forzo uno spazio vuoto al client")
+                        response = " "
+                        fallback_ai_response = {
+                            "type": "agent_message",
+                            "data": response
+                        }
+                        # Invia un singolo spazio, formattato come gli altri chunk agent_message
+                        yield f"data: {json.dumps(fallback_ai_response)}\n\n"
 
                     data = {
                         "human": query,
@@ -416,3 +397,7 @@ def ask(
                     logger.error(f"DB - Errore nell'inserire i dati nella collection: {e}")
 
         return stream_response()
+
+
+# Re-export per i test unitari
+build_llm_input_window_hook = build_llm_input_window_hook
