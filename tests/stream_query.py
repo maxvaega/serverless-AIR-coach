@@ -150,6 +150,9 @@ def test_stream_query_saves_tool_result():
                     continue
                 try:
                     payload_str = str(line)[len("data:"):].strip()
+                    # Rimuovi eventuali escape sequences alla fine
+                    if payload_str.endswith('\\n\\n'):
+                        payload_str = payload_str[:-4]
                     evt = json.loads(payload_str)
                 except Exception:
                     continue

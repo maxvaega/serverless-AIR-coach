@@ -43,16 +43,6 @@ INFO:     Started reloader process [31094] using StatReload
 
 ```
 
-## Test Single Query
-
-```sh
-python -m src.test
-
-# Example Output
-Enter the query: 
-
-```
-
 ## To run automatic testing
 
 see [tests/readme.md](tests/readme.md) for setup and usage with pytest.
