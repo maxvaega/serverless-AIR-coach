@@ -1,7 +1,8 @@
 from typing import Dict
 import datetime
 import re
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 import threading
 from .s3_utils import fetch_docs_from_s3
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage

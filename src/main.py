@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Security
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from src.logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 from src.models import MessageRequest
 from src.rag import ask
 from src.update_docs import update_docs
@@ -36,6 +37,15 @@ app.add_middleware(
 #############################################
 # FastAPI Endpoints
 #############################################
+
+@api_router.get("/test")
+async def test():
+    """
+    Test endpoint to verify the API is running.
+    """
+    logger.info("Test endpoint called")
+    return {"message": "API is running successfully!"}
+
 
 @api_router.post("/stream_query")
 async def stream_endpoint(
@@ -84,5 +94,3 @@ async def update_docs_endpoint():
 
 app.include_router(api_router) # for /api/ prefix
 
-if __name__ == "__main__":
-    uvicorn.run(app, port=8080, log_level="info")

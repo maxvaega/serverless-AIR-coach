@@ -133,8 +133,8 @@ Il tool `domanda_teoria` supporta i seguenti scenari di utilizzo, tutti testati 
 pytest -v -rs tests/
 
 # Solo test E2E
-pytest -v -rs tests/stream_query.py
-pytest -v -rs tests/update_docs.py
+pytest -v -rs tests/test_stream_query.py
+pytest -v -rs tests/test_update_docs.py
 
 # Solo test unitari del tool
 pytest -v -rs tests/test_tools.py
@@ -171,7 +171,9 @@ export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
 export API_URL="https://server-da-testare/api"
 ```
 
-4) Avvia il backend e lancia i test:
+4) Avvia il backend: `python run.py`
+
+5) lancia i test:
 ```sh
 # Tutti i test
 pytest -v -rs tests/

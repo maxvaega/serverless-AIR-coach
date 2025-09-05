@@ -2,7 +2,8 @@ from typing import List
 
 from langchain_core.messages import BaseMessage, HumanMessage
 
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 
 def last_n_turns(messages: List[BaseMessage], n_turns: int) -> List[BaseMessage]:

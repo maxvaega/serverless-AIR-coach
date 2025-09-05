@@ -3,7 +3,8 @@ from typing import List, Dict, Optional, Any
 
 from ..env import DATABASE_NAME, COLLECTION_NAME
 from ..database import insert_data
-from ..logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 
 class ConversationPersistence:

@@ -1,7 +1,8 @@
 from typing import Optional
 from langgraph.checkpoint.memory import InMemorySaver
 
-from ..logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 
 class AgentStateManager:

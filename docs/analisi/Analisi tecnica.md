@@ -50,7 +50,7 @@ L'architettura è ora **altamente modulare** con separazione chiara delle respon
 ```
 app.py
 ├── src/models.py (MessageRequest, MessageResponse)
-├── src/logging_config.py (logger)
+├── run.py (nuovo entry point Vercel)
 ├── src/rag.py (orchestratore snellito: ask, _ask_sync, _ask_async)
 │   ├── src/agent/ (moduli gestione agenti)
 │   │   ├── agent_manager.py (AgentManager factory)
@@ -247,8 +247,13 @@ Nota: la memoria volatile pre‑esistente per `thread_id` non viene cancellata m
 ### src/database.py
 - Connessione a MongoDB, funzioni CRUD, gestione indici.
 
-### src/env.py
-- Caricamento variabili d'ambiente, configurazione Auth0, MongoDB, AWS, Google.
+### src/env.py - Environment Management Refactorizzato
+- **Gestione centralizzata**: Classe `Settings` con Pydantic per validazione e typing
+- **Configurazione unificata**: Tutte le variabili d'ambiente centralizzate in un'unica classe
+- **Backward compatibility**: Variabili globali mantenute per migrazione graduale
+- **Validazione**: Type hints e validazione automatica dei valori
+- **Categorizzazione**: LLM, MongoDB, AWS, Auth0, Application settings organizzati
+- **Factory pattern**: `get_settings()` con `@lru_cache()` per istanza singleton
 
 ### src/utils.py
 - `format_user_metadata`: formatta metadati utente.
@@ -257,8 +262,10 @@ Nota: la memoria volatile pre‑esistente per `thread_id` non viene cancellata m
 ### src/models.py
 - Modelli Pydantic: `MessageRequest`, `MessageResponse`.
 
-### src/logging_config.py
-- Logger globale su stdout, livello INFO.
+### Logging Configuration - Refactorizzato
+- **Migrazione a uvicorn logger standard**: Eliminato `src/logging_config.py` custom
+- **Logger unificato**: `logging.getLogger("uvicorn")` utilizzato in tutti i moduli
+- **Compatibilità**: Migrazione trasparente senza impatto funzionale
 
 ### src/test.py
 - Script CLI per testare la funzione `ask` da terminale.
@@ -303,7 +310,13 @@ Per le variabili di ambiente, fare interamente riferimento al file `.env.example
 
 ## Deployment su Vercel Serverless - Architettura Refactorizzata
 
-L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environment** con **architettura modulare refactorizzata**:
+L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environment** con **architettura modulare refactorizzata** e **configurazione migliorata**:
+
+### Entry Point e Configurazione
+- **Entry point separato**: `run.py` invece di `app.py` per deployment
+- **Vercel config aggiornata**: `vercel.json` ora punta a `run.py`
+- **Health check endpoint**: `/api/test` per verifica stato API
+- **Logging standardizzato**: Utilizzo uvicorn logger per compatibilità Vercel
 
 ### Gestione Event Loop Ottimizzata
 - **AgentManager**: Factory pattern per creazione per-request, evita `Event loop is closed`
@@ -312,6 +325,9 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 - **Modularità**: Separazione responsabilità riduce complessità event loop management
 
 ### Ottimizzazioni Serverless Refactorizzate
+- **Environment management**: Pydantic Settings per validazione e type safety
+- **Logging standardizzato**: Migrazione a uvicorn logger per compatibilità
+- **Entry point ottimizzato**: `run.py` separato per deployment configuration
 - **Memoria ibrida ottimizzata**: 
   - `MemorySeeder` unificato elimina duplicazione seeding (riduce cold start)
   - `AgentStateManager` singleton per gestione efficiente memoria volatile
@@ -416,7 +432,8 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 ## Riferimenti ai File - Architettura Refactorizzata
 
 ### **File Core**
-- **app.py** - Entry point FastAPI
+- **app.py** - Applicazione FastAPI con endpoint e middleware
+- **run.py** - Entry point Vercel separato (nuovo)
 - **src/rag.py** - Orchestratore refactorizzato (95 righe)
 - **src/auth.py** - Autenticazione JWT Auth0
 - **src/database.py** - CRUD MongoDB
@@ -434,11 +451,10 @@ L'applicazione è ottimizzata per il deployment su **Vercel Serverless Environme
 ### **Moduli Supporto**
 - **src/auth0.py** - Gestione metadati utente Auth0
 - **src/cache.py** - Cache in-memory user/token
-- **src/env.py** - Configurazione variabili ambiente
+- **src/env.py** - Configurazione centralizzata con Pydantic Settings (refactorizzato)
 - **src/utils.py** - Utility + PromptManager versionato
 - **src/models.py** - Modelli Pydantic request/response
 - **src/services/database/** - Servizi MongoDB specializzati
-- **src/logging_config.py** - Configurazione logging
 - **src/test.py** - Script CLI test
 - **tests/** - Suite completa test (18/18 passati)
 

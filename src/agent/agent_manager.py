@@ -7,7 +7,8 @@ from ..env import FORCED_MODEL, HISTORY_LIMIT
 from ..tools import domanda_teoria
 from ..history_hooks import build_llm_input_window_hook
 from ..prompt_personalization import get_personalized_prompt_for_user, generate_thread_id
-from ..logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 
 class AgentManager:

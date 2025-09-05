@@ -2,7 +2,8 @@ from typing import Optional, Tuple
 
 from .auth0 import get_user_metadata
 from .cache import get_cached_user_data, set_cached_user_data
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 from .utils import format_user_metadata, get_prompt_with_version
 
 

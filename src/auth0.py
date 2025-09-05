@@ -1,6 +1,7 @@
 import requests
 from .env import AUTH0_DOMAIN, AUTH0_SECRET
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 from .cache import set_cached_auth0_token, get_cached_auth0_token
 from typing import Optional
 

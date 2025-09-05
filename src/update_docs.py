@@ -1,5 +1,6 @@
 from .utils import update_prompt_from_s3
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 def update_docs():
     """

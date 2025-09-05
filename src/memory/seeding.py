@@ -4,7 +4,8 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from ..env import DATABASE_NAME, COLLECTION_NAME, HISTORY_LIMIT
 from ..database import get_data
-from ..logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 
 class MemorySeeder:

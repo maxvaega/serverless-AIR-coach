@@ -47,20 +47,6 @@ INFO:     Started reloader process [31094] using StatReload
 
 see [tests/readme.md](tests/readme.md) for setup and usage with pytest.
 
-### Quick Test Commands
-
-```sh
-# All tests
-pytest -v -rs tests/
-
-# Only unit tests for tools
-pytest -v -rs tests/test_tools.py
-
-# Only E2E tests
-pytest -v -rs tests/stream_query.py
-pytest -v -rs tests/update_docs.py
-```
-
 ## LangGraph Agent Notes
 
 - The agent is created per-request with `create_react_agent(model, tools, prompt=personalized_prompt, pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT), checkpointer=InMemorySaver())`.
@@ -72,3 +58,4 @@ pytest -v -rs tests/update_docs.py
 
 - 2025/08: new tool domanda_teoria to output a json with questions from the db
 - 2025/09: rolling window via pre_model_hook, prompt personalization in system prompt, versioned thread_id, no trimming of graph state in warm path
+- 2025/09: refactoring file names, logging and env variables. run.py as an entrypoint and fastapi logic as an src.main.

@@ -1,7 +1,8 @@
 import boto3
 import datetime
 from .env import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 

@@ -11,7 +11,8 @@ from .utils import (
     build_system_prompt,
     ensure_prompt_initialized,
 )
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 from .agent.agent_manager import AgentManager
 from .agent.state_manager import _get_checkpointer
 from .agent.streaming_handler import StreamingHandler

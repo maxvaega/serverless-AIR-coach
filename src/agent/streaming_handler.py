@@ -4,7 +4,8 @@ from langchain_core.messages import HumanMessage, AIMessageChunk
 
 from ..tools import _serialize_tool_output
 from ..utils import _extract_text
-from ..logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 
 class StreamingHandler:

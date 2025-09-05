@@ -1,7 +1,8 @@
 from typing import Any, Dict
 
 from .env import HISTORY_LIMIT
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 from .utils_history import last_n_turns
 
 

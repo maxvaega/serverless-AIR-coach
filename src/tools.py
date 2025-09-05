@@ -6,7 +6,8 @@ from langchain_core.tools import tool
 from langchain_core.messages import ToolMessage
 
 from src.services.database.database_quiz_service import QuizMongoDBService
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 def _serialize_tool_output(tool_output) -> dict:
     """
