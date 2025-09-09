@@ -30,8 +30,9 @@ To set environment variables, copy the file [.env.example](.env.example) and rep
 
 ## FastAPI
 
+#uvicorn run:app --reload
 ```sh
-uvicorn app:app --reload
+python run.py
 
 # Example output
 2025-02-07 11:32:43,980 [INFO] Connected to MongoDB successfully.
