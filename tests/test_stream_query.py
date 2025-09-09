@@ -1,6 +1,9 @@
 import pytest
 import httpx
 import os
+import json
+from src.env import DATABASE_NAME, COLLECTION_NAME
+from src.database import get_collection
 
 API_URL = os.getenv("API_URL", "http://localhost:8080/api")
 
@@ -110,3 +113,80 @@ def test_stream_query_invalid_payload_422():
     with httpx.Client(timeout=10) as client:
         r = client.post(f"{API_URL}/stream_query", json=payload, headers=headers)
         assert r.status_code == 422
+
+
+def test_stream_query_saves_tool_result():
+    """
+    Test E2E: Verifica che una richiesta che triggera il tool salvi il campo 'tool' nel DB
+    con nome tool e risultato prodotti dall'agente nell'ultima run in streaming.
+    """
+    user_id = "google-oauth2|104612087445133776110"
+    payload = {
+        "message": "simuliamo l'esame di teoria",
+        "userid": user_id,
+    }
+
+    token = get_test_auth_token()
+    if not token:
+        pytest.skip("Token di autenticazione non configurato e generazione automatica fallita")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "accept": "application/json",
+    }
+
+    # Esegue la chiamata in streaming, verifica che nello stream compaia un `tool_result`
+    # e poi consuma completamente lo stream per assicurare la persistenza su DB
+    with httpx.Client(timeout=60) as client:
+        with client.stream("POST", f"{API_URL}/stream_query", json=payload, headers=headers) as r:
+            assert r.status_code == 200
+            saw_tool_result = False
+            saw_agent_message_after_tool = False
+            for line in r.iter_lines():
+                if not line:
+                    continue
+                if not str(line).startswith("data:"):
+                    continue
+                try:
+                    payload_str = str(line)[len("data:"):].strip()
+                    # Rimuovi eventuali escape sequences alla fine
+                    if payload_str.endswith('\\n\\n'):
+                        payload_str = payload_str[:-4]
+                    evt = json.loads(payload_str)
+                except Exception:
+                    continue
+                if evt.get("type") == "tool_result":
+                    saw_tool_result = True
+                elif evt.get("type") == "agent_message" and saw_tool_result:
+                    # Dopo un tool_result con return_direct non devono arrivare agent_message
+                    saw_agent_message_after_tool = True
+                # Consuma comunque tutto lo stream
+            # Verifica che abbiamo ricevuto un evento tool_result
+            assert saw_tool_result, "Nessun evento 'tool_result' ricevuto nello stream"
+            # Con tool return-direct non dovrebbero arrivare agent_message successivi
+            assert not saw_agent_message_after_tool, "Sono arrivati 'agent_message' dopo 'tool_result' (return-direct)"
+
+    # Recupera l'ultimo documento per l'utente e verifica il campo 'tool'
+    coll = get_collection(DATABASE_NAME, COLLECTION_NAME)
+    last_doc_cursor = coll.find({"userId": user_id}).sort("timestamp", -1).limit(1)
+    last_docs = list(last_doc_cursor)
+    assert last_docs, "Nessun documento trovato per l'utente dopo la chiamata di streaming"
+    doc = last_docs[0]
+
+    assert "tool" in doc, "Campo 'tool' mancante nel documento salvato"
+    tool_entry = doc["tool"]
+
+    # Supporta sia singolo dict che lista di dict
+    if isinstance(tool_entry, list):
+        assert len(tool_entry) >= 1
+        tool_item = tool_entry[0]
+    else:
+        tool_item = tool_entry
+
+    assert isinstance(tool_item, dict)
+    # Supporta sia schema vecchio (name/result) sia nuovo (tool_name/data)
+    name = tool_item.get("name") or tool_item.get("tool_name")
+    assert name == "domanda_teoria"
+    result = tool_item.get("result") or tool_item.get("data")
+    assert result is not None

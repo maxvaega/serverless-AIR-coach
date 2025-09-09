@@ -1,7 +1,8 @@
 import boto3
 import datetime
 from .env import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 
@@ -13,7 +14,7 @@ def fetch_docs_from_s3():
       - "docs_meta": lista di dizionari con "title" e "last_modified" per ogni file
     """
     try:
-        objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix='docs/')
+        objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix='test/') #temporaneamente test/ - cambiare in docs/
         docs_content = []
         docs_meta = []
 
@@ -31,7 +32,7 @@ def fetch_docs_from_s3():
                     "last_modified": last_modified
                 })
         combined_docs = "\n\n".join(docs_content)
-        logger.info(f"Docs: Found and loaded {len(docs_content)} Markdown files from S3.")
+        logger.info(f"Docs (CARTELLA DI TEST!!): Found and loaded {len(docs_content)} Markdown files from S3.")
         return {"combined_docs": combined_docs, "docs_meta": docs_meta}
     except Exception as e:
         logger.error(f"Error while downloading files from S3: {e}")

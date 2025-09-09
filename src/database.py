@@ -1,7 +1,8 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from .env import URI
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 
 if not URI:
     raise ValueError("No MongoDB URI found. Please set the MONGODB_URI environment variable.")

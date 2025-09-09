@@ -1,26 +1,22 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Security
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from src.logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 from src.models import MessageRequest
-from src.rag import ask, update_docs
+from src.rag import ask
+from src.update_docs import update_docs
 from src.s3_utils import create_prompt_file
 from src.env import is_production
-import json
 import uvicorn
 from src.auth import VerifyToken
 
 auth = VerifyToken()
 
-from fastapi import FastAPI, Security
-from src.auth import VerifyToken
-
-auth = VerifyToken()
-
 app = FastAPI(
-    title='Air-coach api', 
-    version='0.2', 
-    description='API for AIR Coach application<br />now with Gemini 2.0',
+    title='AIR Coach API', 
+    version='0.3', 
+    description='API for AIR Coach agent<br />- with Gemini 2.5<br />- with tools',
     docs_url=None if is_production else "/api/docs",  # Disabilita /docs in produzione
     )
 
@@ -42,6 +38,15 @@ app.add_middleware(
 # FastAPI Endpoints
 #############################################
 
+@api_router.get("/test")
+async def test():
+    """
+    Test endpoint to verify the API is running.
+    """
+    logger.info("Test endpoint called")
+    return {"message": "API is running successfully!"}
+
+
 @api_router.post("/stream_query")
 async def stream_endpoint(
     request: MessageRequest,
@@ -49,7 +54,7 @@ async def stream_endpoint(
 ):
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
-        logger.info(f"Request received: \ntoken= {token}\nmessage= {request.message}\nuserid= {request.userid}")
+        logger.info(f"Request received: \ntoken_len= {len(token)}\nmessage= {request.message}\nuserid= {request.userid}")
         stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
         logger.info("Starting streaming response...")
         return StreamingResponse(stream_response, media_type="text/event-stream")
@@ -89,5 +94,3 @@ async def update_docs_endpoint():
 
 app.include_router(api_router) # for /api/ prefix
 
-if __name__ == "__main__":
-    uvicorn.run(app, port=8080, log_level="info")

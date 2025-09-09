@@ -1,168 +1,159 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from .logging_config import logger
 import datetime
-from .env import *
 import json
-from .database import get_data, insert_data
-from .auth0 import get_user_metadata
-from .utils import format_user_metadata
-from .cache import get_cached_user_data, set_cached_user_data
-from .s3_utils import fetch_docs_from_s3, create_prompt_file
-import threading
+from typing import AsyncGenerator, Optional, Union, Any
 
-_docs_cache = {
-    "content": None,
-    "docs_meta": None,
-    "timestamp": None 
-}
-update_docs_lock = threading.Lock()  # Lock per sincronizzare gli aggiornamenti manuali
+from langchain_core.messages import HumanMessage
 
-def get_combined_docs():
-    """
-    Restituisce il contenuto combinato dei file Markdown usando la cache se disponibile.
-    Aggiorna anche i metadati se la cache è vuota.
-    """
-    global _docs_cache
-    if (_docs_cache["content"] is None) or (_docs_cache["docs_meta"] is None):
-        logger.info("Docs: cache is empty. Fetching from S3...")
-        now = datetime.datetime.utcnow()
-        result = fetch_docs_from_s3()
-        _docs_cache["content"] = result["combined_docs"]
-        _docs_cache["docs_meta"] = result["docs_meta"]
-        _docs_cache["timestamp"] = now
-    else:
-        logger.info("Docs: found valid cache in use. no update triggered.")
-    return _docs_cache["content"]
-
-def build_system_prompt(combined_docs: str) -> str:
-    """
-    Costruisce e restituisce il system_prompt utilizzando il contenuto combinato dei documenti.
-    """
-    return f"""{combined_docs}"""
-
-def update_docs():
-    """
-    Forza l'aggiornamento della cache dei documenti da S3 e rigenera il system_prompt.
-    Aggiorna anche i metadati dei file e restituisce, nella response, il numero di documenti e per ognuno:
-    il titolo e la data di ultima modifica.
-    """
-    global _docs_cache, combined_docs, system_prompt
-    with update_docs_lock:
-        logger.info("Docs: manual update in progress...")
-        now = datetime.datetime.utcnow()
-        result = fetch_docs_from_s3()
-        _docs_cache["content"] = result["combined_docs"]
-        _docs_cache["docs_meta"] = result["docs_meta"]
-        _docs_cache["timestamp"] = now
-        combined_docs = _docs_cache["content"]
-        system_prompt = build_system_prompt(combined_docs)
-        logger.info("Docs Cache and system_prompt updated successfully.")
-
-        # Prepara i dati da ritornare: numero di documenti e metadati
-        docs_count = len(result["docs_meta"])
-        docs_details = result["docs_meta"]
-
-        return {
-            "message": "Document cache and system prompt updated successfully.",
-            "docs_count": docs_count,
-            "docs_details": docs_details,
-            "system_prompt": system_prompt
-        }
-
-# Load Documents from S3 on load to build prompt
-combined_docs = get_combined_docs()
-system_prompt = build_system_prompt(combined_docs)
-
-# Define LLM Model
-model = FORCED_MODEL
-logger.info(f"Selected LLM model: {model}")
-llm = ChatGoogleGenerativeAI(
-    model=model,
-    temperature=0.7,
-    cache=True,
+from .env import DATABASE_NAME, COLLECTION_NAME, HISTORY_LIMIT
+from .database import get_data
+from .utils import (
+    get_combined_docs,
+    build_system_prompt,
+    ensure_prompt_initialized,
 )
+import logging
+logger = logging.getLogger("uvicorn")
+from .agent.agent_manager import AgentManager
+from .agent.state_manager import _get_checkpointer
+from .agent.streaming_handler import StreamingHandler
+from .memory.seeding import MemorySeeder
+from .memory.persistence import ConversationPersistence
 
-def ask(query, user_id, chat_history=False, stream=False, user_data: bool = False, token: str = None):
+
+# ------------------------------------------------------------------------------
+# Costanti e stato di modulo
+# ------------------------------------------------------------------------------
+combined_docs: str = ""
+system_prompt: str = ""
+llm: Optional[Any] = None  # non usare a livello globale in serverless  
+# Checkpointer globale riutilizzabile (non legato all'event loop) per mantenere memoria volatile tra richieste
+checkpointer: Optional[Any] = None
+agent_executor = None  # non usare a livello globale in serverless
+
+
+# ------------------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------------------
+
+def initialize_agent_state(force: bool = False) -> None:
     """
-    Processes a user query and returns a response, optionally streaming the response.
-
-    This function uses a combination of retrieval and chain mechanisms to process the query
-    and generates a response. If chat history is provided, it extends the messages with the
-    chat history and appends the new query. The function supports both synchronous and
-    asynchronous streaming of responses. In streaming mode, it yields chunks of data and
-    inserts the final response into a MongoDB collection.
-
-    :param query: The user query to process.
-    :param user_id: The ID of the user making the query.
-    :param chat_history: Optional; A list of previous chat messages to include in the context.
-    :param stream: Optional; If True, streams the response asynchronously.
-    :return: The response to the query, either as a single result or a generator for streaming.
+    Inizializza solo i documenti e il system_prompt. L'agente/LLM vengono
+    creati per-request per evitare problemi di event loop in ambiente serverless.
     """
-    messages = [SystemMessage(system_prompt)]
+    global combined_docs, system_prompt
+
     try:
-        if user_data:
-            # Recupera i dati utente dalla cache
-            user_info = get_cached_user_data(user_id)
-            if not user_info:
-                # Recupera i metadata da Auth0
-                user_metadata = get_user_metadata(user_id, token=token)
-                user_info = format_user_metadata(user_metadata)
-                set_cached_user_data(user_id, user_info)
-            if user_info:
-                messages.append(AIMessage(user_info))
+        # Inizializza il PromptManager process-global se necessario.
+        ensure_prompt_initialized()
+        # Aggiorna le variabili modulo per retro-compatibilità con il resto del file.
+        if force or not combined_docs or not system_prompt:
+            combined_docs = get_combined_docs()
+            # Nota: il vero system prompt usato dall'agente arriva dal PromptManager.
+            # Manteniamo anche la copia locale per compat.
+            system_prompt = build_system_prompt(combined_docs)
     except Exception as e:
-        logger.error(f"An error occurred while retrieving user data for user ID {user_id}: {e}")
-        return f"data: {{'error': 'An error occurred while retrieving user data: {str(e)}'}}\n\n"
+        logger.error(f"Errore durante l'inizializzazione dello stato agente: {e}")
+
+
+
+# Evita inizializzazione eager di oggetti legati all'event loop in ambiente serverless.
+# Inizializza solo il prompt/documenti al primo utilizzo.
+
+
+# ------------------------------------------------------------------------------
+# API di modulo
+# ------------------------------------------------------------------------------
+
+
+def ask(
+    query: str,
+    user_id: str,
+    chat_history: bool = False,
+    stream: bool = False,
+    user_data: bool = False,
+    token: Optional[str] = None,
+) -> Union[str, AsyncGenerator[str, None]]:
+    """
+    Elabora una query tramite agente LangGraph e restituisce la risposta, opzionalmente in streaming.
+    L'agente può usare tool. La memoria usa il checkpointer se presente, altrimenti si ricostruisce da MongoDB.
+    Se richiesto, i metadata profilo utente vengono recuperati da Auth0.
+    """
+    # Inizializza prompt/documenti (lazy)
+    initialize_agent_state()
     
-    history_limit = 10
+    # Crea agente per-request usando AgentManager
+    checkpointer = _get_checkpointer()
+    agent_executor, config, prompt_version = AgentManager.create_agent(
+        user_id=user_id,
+        token=token, 
+        user_data=user_data,
+        checkpointer=checkpointer
+    )
 
-    try:
-        if chat_history:
-            history = get_data(DATABASE_NAME, COLLECTION_NAME, filters={"userId": user_id}, limit=history_limit)
-            for msg in history:
-                messages.append(HumanMessage(msg["human"]))
-                messages.append(AIMessage(msg["system"]))
-        messages.append(HumanMessage(query))
-
-    except Exception as e:
-        logger.error(f"An error occurred while retrieving chat history: {e}")
-        return f"data: {{'error': 'An error occurred while retrieving chat history: {str(e)}'}}\n\n"
-
+    
+    # Branch per modalità sync/async
     if not stream:
-        return llm.invoke(messages)
+        return _ask_sync(agent_executor, config, query, user_id, chat_history)
     else:
-        response_chunks = []
+        return _ask_async(agent_executor, config, query, user_id, chat_history)
 
-        async def stream_response():
-            try:
-                for event in llm.stream(input=messages):
-                    content = event.content
-                    response_chunks.append(content)
-                    data_dict = {"data": content}
-                    data_json = json.dumps(data_dict)
-                    yield f"data: {data_json}\n\n"
-                    logger.info(f"event= {event}")
-            except Exception as e:
-                logger.error(f"An error occurred while streaming the response: {e}")
-                yield f"data: {{'error': 'An error occurred while streaming the response: {str(e)}'}}\n\n"
-            # Insert the data into the MongoDB collection
-            
-            response = "".join(response_chunks)
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logger.info(f"Response completed at {timestamp}: {response}")
 
-            try:
+def _ask_sync(agent_executor, config, query: str, user_id: str, chat_history: bool) -> str:
+    """
+    Gestisce l'invocazione sincrona dell'agente.
+    """
+    try:
+        # Seed memoria da DB se necessario
+        MemorySeeder.seed_agent_memory(agent_executor, config, user_id, chat_history)
+        
+        # Invocazione sincrona
+        result = agent_executor.invoke({"messages": [HumanMessage(query)]}, config=config)
+        return result["messages"][-1].content
+        
+    except Exception as e:
+        logger.error(f"Errore nell'invocare l'agente: {e}")
+        return "Errore nell'invocare l'agente."
+
+
+def _ask_async(agent_executor, config, query: str, user_id: str, chat_history: bool) -> AsyncGenerator[str, None]:
+    """
+    Gestisce l'invocazione asincrona con streaming dell'agente.
+    """
+    async def stream_response():
+        # Seed memoria da DB se necessario  
+        MemorySeeder.seed_agent_memory(agent_executor, config, user_id, chat_history)
+        
+        # Gestione streaming con handler dedicato
+        streaming_handler = StreamingHandler()
+        
+        try:
+            async for chunk in streaming_handler.handle_stream_events(agent_executor, query, config):
+                yield chunk
                 
-                data = {
-                    "human": query,
-                    "system": response,
-                    "userId": user_id,
-                    "timestamp": timestamp
-                }
-                insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-                logger.info(f"Response inserted into the collection: {COLLECTION_NAME} ")
-            except Exception as e:
-                logger.error(f"An error occurred while inserting the data into the collection: {e}")
-                yield f"data: {{'error': 'An error occurred while inserting the data into the collection: {str(e)}'}}\n\n"
-        return stream_response()
+        finally:
+            # Persistenza finale
+            response = streaming_handler.get_final_response()
+            tool_records = streaming_handler.get_tool_records()
+            serialized_output = streaming_handler.get_serialized_output()
+            
+            # Gestione risposta vuota
+            if not response and not streaming_handler.has_tool_executed():
+                logger.warning("STREAM - Nessuna risposta dall'agente e nessun tool eseguito.")
+                # Mandavo uno spazio vuoto come workaround. TBC
+                # response = " "
+                # fallback_ai_response = {
+                #     "type": "agent_message",
+                #     "data": response
+                # }
+                # yield f"data: {json.dumps(fallback_ai_response)}"
+            
+            # Log completamento e persistenza
+            ConversationPersistence.log_run_completion(response, tool_records, serialized_output)
+            ConversationPersistence.save_conversation(query, response, user_id, tool_records)
+    
+    return stream_response()
+
+
+# Re-export per i test unitari
+from .history_hooks import build_llm_input_window_hook
+build_llm_input_window_hook = build_llm_input_window_hook
