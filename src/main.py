@@ -14,9 +14,9 @@ from src.auth import VerifyToken
 auth = VerifyToken()
 
 app = FastAPI(
-    title='Air-coach api', 
-    version='0.2', 
-    description='API for AIR Coach application<br />now with Gemini 2.0',
+    title='AIR Coach API', 
+    version='0.3', 
+    description='API for AIR Coach agent<br />- with Gemini 2.5<br />- with tools',
     docs_url=None if is_production else "/api/docs",  # Disabilita /docs in produzione
     )
 
