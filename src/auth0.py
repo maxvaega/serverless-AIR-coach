@@ -1,6 +1,7 @@
 import requests
 from .env import AUTH0_DOMAIN, AUTH0_SECRET
-from .logging_config import logger
+import logging
+logger = logging.getLogger("uvicorn")
 from .cache import set_cached_auth0_token, get_cached_auth0_token
 from typing import Optional
 
@@ -35,7 +36,7 @@ def get_auth0_token() -> Optional[str]:
         if access_token:
             # Salva il token nella cache con TTL di 86400 secondi (24 ore)
             set_cached_auth0_token(access_token)
-            logger.info(f"Auth0: Token ottenuto e salvato in cache: {access_token}")
+            logger.info(f"Auth0: Token ottenuto e salvato in cache")
             return access_token
         else:
             logger.error("Auth0: Token non presente nella risposta.")
