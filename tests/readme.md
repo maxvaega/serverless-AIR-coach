@@ -8,22 +8,32 @@ Questo documento descrive la suite di test end-to-end (E2E) pensata per essere e
 stato: sviluppati
 
 ### 1.1. `/api/stream_query`
+<<<<<<< HEAD
 - Obiettivo: verificare che l'endpoint risponda correttamente a una richiesta autenticata, restituisca stream SSE valido e persista correttamente gli output dei tool.
+=======
+- Obiettivo: verificare che l'endpoint risponda correttamente a una richiesta autenticata e restituisca uno stream SSE valido.
+>>>>>>> main
 - Test implementati:
   - Richiesta con token non valido → 401/403
   - Richiesta senza token → 403
   - Richiesta valida → 200 e presenza di linee SSE che iniziano con `data:`
   - Payload non valido → 422 (es. `userid` mancante) [richiede token valido]
+<<<<<<< HEAD
   - Richiesta che triggera un tool →
     - nello stream deve comparire un evento `tool_result` e, se il tool è `return_direct`, non devono comparire `agent_message` successivi
     - viene salvato in MongoDB il campo `tool` con struttura normalizzata `tool_name` e `data` (retrocompatibile con `name`/`result`)
+=======
+>>>>>>> main
 - Dati:
   - `TEST_AUTH_TOKEN`: facoltativo. Se non impostato, i test che richiedono un token valido proveranno a generarlo automaticamente tramite `src.auth0.get_auth0_token()` (client credentials)
   - `userid`: parametrizzato (es. un `google-oauth2|...`)
   - `message`: parametrizzato
 - Note SSE:
   - I test consumano lo stream in modalità line-based per verificare correttamente i chunk SSE (`iter_lines`).
+<<<<<<< HEAD
   - Con tool marcati `return_direct` ci si aspetta che lo stream termini subito dopo l'evento `tool_result` senza ulteriori `agent_message`.
+=======
+>>>>>>> main
 
 ### 1.2. `/api/update_docs`
 - Obiettivo: verificare che l’aggiornamento dei documenti aggiorni la cache e il system prompt.
@@ -35,6 +45,7 @@ stato: sviluppati
 ---
 
 ## 2. Unit Test
+<<<<<<< HEAD
 stato: parzialmente sviluppati
 
 ### 2.1. `src/tools.py` - Tool domanda_teoria
@@ -104,14 +115,40 @@ Il tool `domanda_teoria` supporta i seguenti scenari di utilizzo, tutti testati 
 - insert/find/drop (mock MongoDB)
 
 ### 2.7. `src/utils.py`
+=======
+stato: non sviluppati
+
+### 2.1. `src/rag.py`
+- ask: stream/non-stream, `user_data=True`, `chat_history=True`
+- update_docs: aggiornamento cache e dettagli
+
+### 2.2. `src/auth.py`
+- VerifyToken: JWT valido/non valido
+
+### 2.3. `src/auth0.py`
+- get_auth0_token: recupero/caching
+- get_user_metadata: mock API
+
+### 2.4. `src/cache.py`
+- cache metadati/token
+
+### 2.5. `src/database.py`
+- insert/find/drop (mock MongoDB)
+
+### 2.6. `src/utils.py`
+>>>>>>> main
 - format_user_metadata
 - validate_user_id
 
 ---
 
 ## 3. Mock e Setup
+<<<<<<< HEAD
 - **Tool domanda_teoria**: ✅ Mock completo del servizio database con fixture pytest
 - **Altri moduli**: tbd
+=======
+tbd
+>>>>>>> main
 
 ---
 
@@ -119,16 +156,23 @@ Il tool `domanda_teoria` supporta i seguenti scenari di utilizzo, tutti testati 
 - Disponibile:
   - E2E `/api/stream_query`: invalid token, no token, successo (SSE), payload non valido (422)
   - E2E `/api/update_docs`: successo
+<<<<<<< HEAD
   - **Unit test `src/tools.py`**: ✅ Completamente sviluppati
 - Non disponibile:
   - E2E errori S3 per `/api/update_docs` (500)
   - Altri test unitari (backlog)
+=======
+- Non disponibile:
+  - E2E errori S3 per `/api/update_docs` (500)
+  - Tutti i test unitari (backlog)
+>>>>>>> main
 
 ---
 
 ## 5. Comando di esecuzione
 
 ```sh
+<<<<<<< HEAD
 # Tutti i test
 pytest -v -rs tests/
 
@@ -149,6 +193,9 @@ pytest -v -rs tests/test_tools.py -k "capitolo"          # Solo test per capitol
 pytest -v -rs tests/test_tools.py -k "testo"             # Solo test per ricerca testuale
 pytest -v -rs tests/test_tools.py -k "validazione"       # Solo test di validazione
 pytest -v -rs tests/test_tools.py -k "errore"            # Solo test di gestione errori
+=======
+pytest -v -rs tests/
+>>>>>>> main
 ```
 
 ---
@@ -160,20 +207,32 @@ pytest -v -rs tests/test_tools.py -k "errore"            # Solo test di gestione
 pip install pytest httpx
 ```
 
+<<<<<<< HEAD
 2) (Opzionale) Esporta un token JWT valido per i test che richiedono autenticazione. passaggio opzionale perchè lo script può generare il proprio token prima di simulare le chiamate:
 ```sh
 export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
 ```
    - Se non imposti `TEST_AUTH_TOKEN`, i test proveranno a ottenere un token tramite `src.auth0.get_auth0_token()` usando le variabili d'ambiente Auth0 (`AUTH0_DOMAIN`, `AUTH0_SECRET`, `AUTH0_API_AUDIENCE`, `AUTH0_ISSUER`). In caso di fallimento, i test interessati verranno marcati come `skipped`.
+=======
+2) (Opzionale) Esporta un token JWT valido per i test che richiedono autenticazione:
+```sh
+export TEST_AUTH_TOKEN="il_tuo_token_jwt_valido"
+```
+   - Se non imposti `TEST_AUTH_TOKEN`, i test proveranno a ottenere un token tramite `src.auth0.get_auth0_token()` usando le variabili di ambiente Auth0 (`AUTH0_DOMAIN`, `AUTH0_SECRET`, `AUTH0_API_AUDIENCE`, `AUTH0_ISSUER`). In caso di fallimento, i test interessati verranno marcati come `skipped`.
+>>>>>>> main
 
 3) (Facoltativo) Seleziona l'URL del server da testare (default: `http://localhost:8080/api`)
 ```sh
 export API_URL="https://server-da-testare/api"
 ```
 
+<<<<<<< HEAD
 4) Avvia il backend: `python run.py`
 
 5) lancia i test:
+=======
+4) Avvia il backend e lancia i test:
+>>>>>>> main
 ```sh
 # Tutti i test
 pytest -v -rs tests/
@@ -183,6 +242,7 @@ pytest -v -rs tests/stream_query.py
 
 # Solo update_docs (non richiede TEST_AUTH_TOKEN)
 pytest -v -rs tests/update_docs.py
+<<<<<<< HEAD
 
 # Solo test del tool domanda_teoria
 pytest -v -rs tests/test_tools.py
@@ -196,13 +256,23 @@ pytest -v -rs tests/test_tools.py
 
 Possono essere eseguiti immediatamente dopo l'installazione delle dipendenze pytest.
 
+=======
+```
+
+>>>>>>> main
 ---
 
 ## 7. Note operative
 - I test E2E dipendono da servizi esterni reali (Auth0, S3, MongoDB) e possono fallire in assenza di configurazioni o disponibilità dei servizi.
+<<<<<<< HEAD
 - **I test unitari del tool domanda_teoria sono completamente isolati** e usano mock per non dipendere da servizi esterni.
 - **Copertura test unitari**: 11 test che coprono tutti i casi d'uso del tool domanda_teoria
 - **Isolamento**: I test unitari utilizzano `unittest.mock.Mock` e `patch` per isolare completamente il tool dalle dipendenze esterne
 - `API_URL` può puntare a ambienti diversi (locale, dev, prod).
 - La generazione automatica del token usa un token di tipo client credentials; deve essere compatibile con la verifica JWT dell'API (audience/issuer coerenti). In caso contrario, imposta manualmente `TEST_AUTH_TOKEN`.
 - `tests/conftest.py` aggiunge la root del progetto al `PYTHONPATH` per consentire gli import da `src.*` durante l'esecuzione di pytest.
+=======
+- `API_URL` può puntare a ambienti diversi (locale, dev, prod).
+ - La generazione automatica del token usa un token di tipo client credentials; deve essere compatibile con la verifica JWT dell'API (audience/issuer coerenti). In caso contrario, imposta manualmente `TEST_AUTH_TOKEN`.
+ - `tests/conftest.py` aggiunge la root del progetto al `PYTHONPATH` per consentire gli import da `src.*` durante l'esecuzione di pytest.
+>>>>>>> main
