@@ -270,7 +270,6 @@ Nota: la memoria volatile pre‑esistente per `thread_id` non viene cancellata m
   - `ENABLE_GOOGLE_CACHING`: Flag per abilitazione caching implicito
   - `CACHE_REGION`: Region per cache (deve essere uguale a VERTEX_AI_REGION)
   - `CACHE_DEBUG_LOGGING`: Logging dettagliato cache hits/misses
-  - `GOOGLE_CLOUD_PROJECT`: Project ID Google Cloud per Vertex AI
 - **Backward compatibility**: Variabili globali mantenute per migrazione graduale
 - **Validazione**: Type hints e validazione automatica dei valori
 - **Categorizzazione**: LLM, MongoDB, AWS, Auth0, Application settings organizzati
