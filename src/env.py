@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     # LLM Configuration
     GOOGLE_API_KEY: str = os.getenv('GOOGLE_API_KEY', '')
     FORCED_MODEL: str = os.getenv("FORCED_MODEL", "models/gemini-2.5-flash")
+
+    # Google Cloud Regional Configuration
+    VERTEX_AI_REGION: str = os.getenv("VERTEX_AI_REGION", "europe-west8")  # Milano - region per inferenza Gemini
+    ENABLE_GOOGLE_CACHING: bool = os.getenv("ENABLE_GOOGLE_CACHING", "true").lower() == "true"
+    CACHE_REGION: str = os.getenv("CACHE_REGION", "europe-west8")  # Stessa region per massimizzare cache hits
+    CACHE_DEBUG_LOGGING: bool = os.getenv("CACHE_DEBUG_LOGGING", "false").lower() == "true"
     
     # MongoDB Configuration
     URI: str = os.getenv("MONGODB_URI", '')
@@ -65,3 +71,9 @@ auth0_issuer = settings.auth0_issuer
 auth0_algorithms = settings.auth0_algorithms
 FORCED_MODEL = settings.FORCED_MODEL
 HISTORY_LIMIT = settings.HISTORY_LIMIT
+
+# Google Cloud Regional Configuration
+VERTEX_AI_REGION = settings.VERTEX_AI_REGION
+ENABLE_GOOGLE_CACHING = settings.ENABLE_GOOGLE_CACHING
+CACHE_REGION = settings.CACHE_REGION
+CACHE_DEBUG_LOGGING = settings.CACHE_DEBUG_LOGGING

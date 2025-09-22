@@ -13,6 +13,14 @@ L'applicazione AIR Coach API è una piattaforma backend per chatbot con **archit
 
 L'architettura è ora **altamente modulare** con separazione chiara delle responsabilità, ottimizzata per l'ambiente serverless e **integrata con LangGraph** per gestione avanzata di agenti AI.
 
+### **Google Cloud Implicit Caching Integration**
+L'applicazione è configurata per utilizzare il **caching implicito di Google Cloud** per ridurre i costi delle chiamate API al modello Gemini:
+- **Region fissa**: `europe-west8` (Milano) per inferenza e cache consistency
+- **Configurazione automatica**: Nessuna gestione manuale della cache richiesta
+- **Monitoring integrato**: Sistema di logging e metriche per tracciare cache hits/misses
+- **Ottimizzazione prompt**: Struttura ottimizzata per massimizzare cache hits
+- **Compliance GDPR**: Processing dei dati in Europa per conformità normativa
+
 ## Flusso End-to-End: /stream_query - Architettura Refactorizzata
 
 ### **1. Autenticazione e Validazione**
@@ -223,6 +231,13 @@ Nota: la memoria volatile pre‑esistente per `thread_id` non viene cancellata m
 - **Logging**: `log_run_completion()` con dettagli run e tool output
 - **Data formatting**: Timestamp, user_id, tripletta human/system/tool
 
+#### src/monitoring/cache_monitor.py
+- **Cache metrics logging**: Sistema di monitoraggio per Google Cloud implicit caching
+- **log_cache_metrics()**: Estrazione e logging delle metriche di cache da response LLM
+- **log_request_context()**: Logging contesto richiesta per debugging cache
+- **analyze_cache_effectiveness()**: Analisi aggregata dell'efficacia del caching
+- **Token savings tracking**: Tracciamento risparmi token e hit rate percentuale
+
 ### src/tools.py
 - **Implementa i tool utilizzabili dall'agente LangGraph.**
 - **Tool disponibili**:
@@ -250,6 +265,11 @@ Nota: la memoria volatile pre‑esistente per `thread_id` non viene cancellata m
 ### src/env.py - Environment Management Refactorizzato
 - **Gestione centralizzata**: Classe `Settings` con Pydantic per validazione e typing
 - **Configurazione unificata**: Tutte le variabili d'ambiente centralizzate in un'unica classe
+- **Google Cloud Regional Configuration**: Configurazione per caching implicito
+  - `VERTEX_AI_REGION`: Region per inferenza Gemini (default: europe-west8)
+  - `ENABLE_GOOGLE_CACHING`: Flag per abilitazione caching implicito
+  - `CACHE_REGION`: Region per cache (deve essere uguale a VERTEX_AI_REGION)
+  - `CACHE_DEBUG_LOGGING`: Logging dettagliato cache hits/misses
 - **Backward compatibility**: Variabili globali mantenute per migrazione graduale
 - **Validazione**: Type hints e validazione automatica dei valori
 - **Categorizzazione**: LLM, MongoDB, AWS, Auth0, Application settings organizzati

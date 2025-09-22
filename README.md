@@ -60,3 +60,4 @@ see [tests/readme.md](tests/readme.md) for setup and usage with pytest.
 - 2025/08: new tool domanda_teoria to output a json with questions from the db
 - 2025/09: rolling window via pre_model_hook, prompt personalization in system prompt, versioned thread_id, no trimming of graph state in warm path
 - 2025/09: refactoring file names, logging and env variables. run.py as an entrypoint and fastapi logic as an src.main.
+- 2025/09: moved inference to europe-west8 (Milan) + caching in Gemini

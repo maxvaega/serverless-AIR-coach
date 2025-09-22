@@ -4,7 +4,7 @@ from typing import AsyncGenerator, Optional, Union, Any
 
 from langchain_core.messages import HumanMessage
 
-from .env import DATABASE_NAME, COLLECTION_NAME, HISTORY_LIMIT
+from .env import DATABASE_NAME, COLLECTION_NAME, HISTORY_LIMIT, VERTEX_AI_REGION, FORCED_MODEL, CACHE_DEBUG_LOGGING
 from .database import get_data
 from .utils import (
     get_combined_docs,
@@ -18,6 +18,7 @@ from .agent.state_manager import _get_checkpointer
 from .agent.streaming_handler import StreamingHandler
 from .memory.seeding import MemorySeeder
 from .memory.persistence import ConversationPersistence
+from .monitoring.cache_monitor import log_cache_metrics, log_request_context
 
 
 # ------------------------------------------------------------------------------
@@ -80,12 +81,16 @@ def ask(
     """
     # Inizializza prompt/documenti (lazy)
     initialize_agent_state()
-    
+
+    # Log contesto richiesta per monitoraggio cache
+    if CACHE_DEBUG_LOGGING:
+        log_request_context(user_id, FORCED_MODEL, VERTEX_AI_REGION)
+
     # Crea agente per-request usando AgentManager
     checkpointer = _get_checkpointer()
     agent_executor, config, prompt_version = AgentManager.create_agent(
         user_id=user_id,
-        token=token, 
+        token=token,
         user_data=user_data,
         checkpointer=checkpointer
     )
