@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     ENABLE_GOOGLE_CACHING: bool = os.getenv("ENABLE_GOOGLE_CACHING", "true").lower() == "true"
     CACHE_REGION: str = os.getenv("CACHE_REGION", "europe-west8")  # Stessa region per massimizzare cache hits
     CACHE_DEBUG_LOGGING: bool = os.getenv("CACHE_DEBUG_LOGGING", "false").lower() == "true"
-    GOOGLE_CLOUD_PROJECT: str = os.getenv("GOOGLE_CLOUD_PROJECT", "")
     
     # MongoDB Configuration
     URI: str = os.getenv("MONGODB_URI", '')
@@ -78,4 +77,3 @@ VERTEX_AI_REGION = settings.VERTEX_AI_REGION
 ENABLE_GOOGLE_CACHING = settings.ENABLE_GOOGLE_CACHING
 CACHE_REGION = settings.CACHE_REGION
 CACHE_DEBUG_LOGGING = settings.CACHE_DEBUG_LOGGING
-GOOGLE_CLOUD_PROJECT = settings.GOOGLE_CLOUD_PROJECT
