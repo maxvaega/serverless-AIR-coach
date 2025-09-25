@@ -2,7 +2,6 @@ from typing import Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
-
 from ..env import FORCED_MODEL, HISTORY_LIMIT, VERTEX_AI_REGION, CACHE_DEBUG_LOGGING
 from ..tools import domanda_teoria
 from ..history_hooks import build_llm_input_window_hook
