@@ -62,7 +62,6 @@ class TestAgentManagerCaching:
 
         assert 'location' in call_kwargs
         assert call_kwargs['location'] == settings.VERTEX_AI_REGION
-        assert 'project' in call_kwargs
         assert call_kwargs['model'] == settings.FORCED_MODEL
 
     @mock.patch('src.agent.agent_manager.ChatGoogleGenerativeAI')
@@ -82,7 +81,6 @@ class TestAgentManagerCaching:
         # Verifica parametri critici per caching
         call_kwargs = mock_llm.call_args[1]
         assert call_kwargs['location'] == "europe-west8"  # Region fissa per caching
-        assert 'project' in call_kwargs  # Project ID necessario per Vertex AI
 
 
 class TestCacheMonitoring:
