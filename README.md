@@ -48,6 +48,10 @@ INFO:     Started reloader process [31094] using StatReload
 
 see [tests/readme.md](tests/readme.md) for setup and usage with pytest.
 
+## API Health Check Monitor
+
+The `monitor_api.py` script provides continuous monitoring of the API health endpoint in the production url. It performs automated health checks every 30 seconds, displaying success/failure status with timestamps and detailed error reporting. Run with `python monitor_api.py` to monitor API availability in real-time.
+
 ## LangGraph Agent Notes
 
 - The agent is created per-request with `create_react_agent(model, tools, prompt=personalized_prompt, pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT), checkpointer=InMemorySaver())`.
