@@ -44,9 +44,11 @@ INFO:     Started reloader process [31094] using StatReload
 
 ```
 
-## To run automatic testing
+## Documentation
 
-see [tests/readme.md](tests/readme.md) for setup and usage with pytest.
+- **[Functional Analysis](docs/FUNCTIONAL.md)**: Business and product perspective - features, use cases, and end-user flows
+- **[Technical Analysis](docs/TECNICAL.md)**: Engineering perspective - architecture, patterns, and implementation details
+- **[Testing Documentation](tests/README.md)**: Complete testing strategy, setup and usage with pytest
 
 ## API Health Check Monitor
 
