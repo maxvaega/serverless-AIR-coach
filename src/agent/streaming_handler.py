@@ -60,7 +60,7 @@ class StreamingHandler:
                     
         except Exception as e:
             logger.error(f"Errore nello streaming con controllo tool: {e}")
-            yield f"data: {{'error': 'Errore nello streaming: {str(e)}'}}\n\n"
+            yield f"data: {{'error': 'Errore nello streaming: {str(e)}'}}"
     
     def _reset_state(self):
         """Reset dello stato interno per nuovo streaming."""
@@ -111,7 +111,7 @@ class StreamingHandler:
                 "data": self.serialized_output,
                 "final": True
             }
-            yield f"data: {json.dumps(structured_response)}\n\n"
+            yield f"data: {json.dumps(structured_response)}"
             logger.info(f"TOOL - {tool_name} output processed")
     
     async def _handle_model_stream(self, event: Dict) -> AsyncGenerator[str, None]:
@@ -125,7 +125,7 @@ class StreamingHandler:
                     "type": "agent_message",
                     "data": content_text
                 }
-                yield f"data: {json.dumps(ai_response)}\n\n"
+                yield f"data: {json.dumps(ai_response)}"
     
     def get_final_response(self) -> str:
         """Restituisce la risposta finale concatenata."""
