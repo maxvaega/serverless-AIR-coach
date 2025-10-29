@@ -8,6 +8,7 @@ from src.rag import ask
 from src.update_docs import update_docs
 from src.s3_utils import create_prompt_file
 from src.env import is_production
+from src.parrot import parrot_stream
 import json
 import uvicorn
 from src.auth import VerifyToken
@@ -138,6 +139,20 @@ async def stream_endpoint(
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Exception occurred in /stream_query: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@api_router.post("/stream_parrot")
+async def stream_parrot_endpoint(request: MessageRequest):
+    """
+    Debug endpoint that simulates the streaming output of /stream_query.
+
+    """
+    try:
+        logger.info(f"PARROT endpoint called: message_len={len(request.message)}, userid={request.userid}")
+        stream_response = parrot_stream(request.message)
+        return StreamingResponse(stream_response, media_type="text/event-stream")
+    except Exception as e:
+        logger.error(f"Exception occurred in /stream_parrot: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @api_router.post("/update_docs")

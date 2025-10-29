@@ -144,13 +144,6 @@ def _ask_async(agent_executor, config, query: str, user_id: str, chat_history: b
             # Gestione risposta vuota
             if not response and not streaming_handler.has_tool_executed():
                 logger.warning("STREAM - Nessuna risposta dall'agente e nessun tool eseguito.")
-                # Mandavo uno spazio vuoto come workaround. TBC
-                # response = " "
-                # fallback_ai_response = {
-                #     "type": "agent_message",
-                #     "data": response
-                # }
-                # yield f"data: {json.dumps(fallback_ai_response)}"
             
             # Log completamento e persistenza
             ConversationPersistence.log_run_completion(response, tool_records, serialized_output)
