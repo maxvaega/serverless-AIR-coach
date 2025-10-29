@@ -17,7 +17,10 @@ auth = VerifyToken()
 app = FastAPI(
     title='AIR Coach API',
     version='0.3',
-    description='API for AIR Coach agent<br />- with Gemini 2.5<br />- with tools',
+    description='''
+# AIR Coach API
+
+    ''',
     docs_url="/api/docs",  # Swagger enabled in production
     redoc_url="/api/redoc"  # ReDoc enabled in production
     )
@@ -54,6 +57,79 @@ async def stream_endpoint(
     request: MessageRequest,
     auth_result: dict = Security(auth.verify)
 ):
+    """
+    Main streaming chat endpoint 
+    
+    This endpoint uses **Server-Sent Events (SSE)** 
+    The agent can execute tools (like quiz retrieval)
+
+    ## Authentication
+
+    **Required**: Bearer JWT token 
+
+    ## Request Format
+
+    **Content-Type**: `application/json`
+
+    **Body**:
+    - `message` (string, required): User query text
+    - `userid` (string, required): User identifier (min length: 1)
+
+    **Example**:
+    ```json
+    {
+      "message": "Ciao, puoi farmi una domanda di teoria?",
+      "userid": "[userid_string]"
+    }
+    ```
+
+    ## Response Format (SSE Stream)
+
+    **Media Type**: `text/event-stream`
+
+    The stream produces JSON events with different types. Each event is prefixed with `data:` per SSE specification.
+
+    ### Event Type 1: `agent_message`
+
+    Incremental text chunks from the AI response. Clients should concatenate these to build the complete message.
+
+    ```json
+    data: {"type": "agent_message", "data": "Ecco"}
+    data: {"type": "agent_message", "data": " una"}
+    data: {"type": "agent_message", "data": " domanda..."}
+    ```
+
+    ### Event Type 2: `tool_result`
+
+    Result from tool execution. Currently, the main tool is **domanda_teoria** for quiz questions.
+
+    ```json
+    data: {
+      "type": "tool_result",
+      "tool_name": "domanda_teoria",
+      "data": {
+        "capitolo": 1,
+        "capitolo_nome": "Meteorologia applicata al paracadutismo",
+        "numero": 3,
+        "testo": "A quale quota si formano i cumuli?",
+        "opzioni": [
+          {"id": "A", "testo": "1000-2000 metri"},
+          {"id": "B", "testo": "2000-4000 metri"},
+          {"id": "C", "testo": "4000-6000 metri"}
+        ],
+        "risposta_corretta": "A"
+      },
+      "final": true
+    }
+    ```
+
+    ## Response Status Codes
+
+    - **200**: Stream started successfully
+    - **401/403**: Invalid or missing authentication token
+    - **422**: Invalid request payload (missing userid or empty message)
+    - **500**: Internal server error
+    """
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
         logger.info(f"Request received: \ntoken_len= {len(token)}\nmessage= {request.message}\nuserid= {request.userid}")
