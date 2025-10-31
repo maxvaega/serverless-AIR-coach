@@ -36,6 +36,37 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # Environment variables for Claude execution
+          claude_env: |
+            # Google
+            GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+            # Langsmith
+            LANGCHAIN_TRACING_V2: true
+            LANGCHAIN_ENDPOINT: "https://api.smith.langchain.com"
+            LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
+            LANGCHAIN_PROJECT: ${{ secrets.LANGCHAIN_PROJECT }}
+            # MongoDB
+            MONGODB_URI: ${{ secrets.MONGODB_URI }}
+            DATABASE_NAME: conversations
+            COLLECTION_NAME: ${{ secrets.COLLECTION_NAME }}
+            # AWS
+            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            BUCKET_NAME: air-coach
+            # Auth0
+            AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+            AUTH0_SECRET: ${{ secrets.AUTH0_SECRET }}
+            AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
+            AUTH0_ISSUER: ${{ secrets.AUTH0_ISSUER }}
+            # Optional configurations
+            FORCED_MODEL: "models/gemini-2.5-flash-lite"
+            # Google Cloud Regional Configuration
+            VERTEX_AI_REGION: europe-west8
+            ENABLE_GOOGLE_CACHING: true
+            CACHE_REGION: europe-west8
+            CACHE_DEBUG_LOGGING: false
+
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
