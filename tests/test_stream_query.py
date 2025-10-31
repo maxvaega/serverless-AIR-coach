@@ -122,7 +122,7 @@ def test_stream_query_saves_tool_result():
     """
     user_id = "google-oauth2|104612087445133776110"
     payload = {
-        "message": "fammi una domanda casuale di teoria",
+        "message": "fammi una domanda di teoria scelta casualmente. usa domanda_teoria",
         "userid": user_id,
     }
 
