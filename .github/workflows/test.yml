@@ -27,7 +27,45 @@ jobs:
 
     - name: Install test dependencies
       run: |
-        pip install pytest>=8.0.0 pytest-asyncio>=0.23.0 pytest-cov>=4.1.0
+        pip install pytest==8.0.0 pytest-asyncio==0.23.0 pytest-cov==4.1.0
+
+    - name: Start FastAPI server in background
+      run: |
+        python run.py &
+        echo $! > server.pid
+      env:
+        # Google
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        # Langsmith
+        LANGCHAIN_TRACING_V2: true
+        LANGCHAIN_ENDPOINT: "https://api.smith.langchain.com"
+        LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
+        LANGCHAIN_PROJECT: ${{ secrets.LANGCHAIN_PROJECT }}
+        # MongoDB
+        MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        DATABASE_NAME: conversations
+        COLLECTION_NAME: ${{ secrets.COLLECTION_NAME }}
+        # AWS
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        BUCKET_NAME: air-coach
+        # Auth0
+        AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+        AUTH0_SECRET: ${{ secrets.AUTH0_SECRET }}
+        AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
+        AUTH0_ISSUER: ${{ secrets.AUTH0_ISSUER }}
+        # Optional configurations
+        FORCED_MODEL: "models/gemini-2.5-flash-lite"
+        VERTEX_AI_REGION: europe-west8
+        ENABLE_GOOGLE_CACHING: true
+        CACHE_REGION: europe-west8
+        CACHE_DEBUG_LOGGING: false
+
+    - name: Wait for server to be ready
+      run: |
+        echo "Waiting for server to start..."
+        timeout 60 bash -c 'until curl -f http://localhost:8080/api/test; do sleep 2; done'
+        echo "Server is ready!"
 
     - name: Run tests with pytest
       env:
@@ -53,8 +91,8 @@ jobs:
         AUTH0_ISSUER: ${{ secrets.AUTH0_ISSUER }}
         # Test Auth Token (optional for E2E tests)
         TEST_AUTH_TOKEN: ${{ secrets.TEST_AUTH_TOKEN }}
-        # API URL for tests
-        API_URL: "https://serverless-air-coach-git-develop-ai-struttore.vercel.app/api"
+        # API URL for tests - points to local server started in background
+        API_URL: "http://localhost:8080/api"
         # Optional configurations
         FORCED_MODEL: "models/gemini-2.5-flash-lite"
         VERTEX_AI_REGION: europe-west8
@@ -63,6 +101,14 @@ jobs:
         CACHE_DEBUG_LOGGING: false
       run: |
         pytest -v -rs tests/ --cov=src --cov-report=term-missing
+
+    - name: Stop server
+      if: always()
+      run: |
+        if [ -f server.pid ]; then
+          kill $(cat server.pid) || true
+          rm server.pid
+        fi
 
     - name: Upload coverage reports
       if: always()

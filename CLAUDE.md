@@ -16,7 +16,7 @@
 - `pytest -v -rs tests/test_stream_query.py`: E2E streaming tests
 
 ## Code Style (CRITICAL RULES)
-- **NEVER work on main branch**: Always create `feature/name` branch from develop
+- **NEVER work on main branch**: Always create a new branch
 - **Always run tests**: Execute pytest after any code changes
 - **Update documentation**: Modify docs when changing code behavior
 - **LangGraph patterns**: Use factory pattern for agents, singleton for checkpointer
