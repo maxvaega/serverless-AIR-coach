@@ -17,8 +17,8 @@ class MessageRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "message": "Give me a theory question about parachute safety",
-                "userid": "google-oauth2|104612087445133776110"
+                "message": "Ciao cosa sai dirmi?",
+                "userid": "userid_string"
             }
         }
 
@@ -44,7 +44,7 @@ class SSEAgentMessage(BaseModel):
         json_schema_extra = {
             "example": {
                 "type": "agent_message",
-                "data": "Ecco una domanda sulla sicurezza..."
+                "data": "Ciao! Sono AIR Coach, sono qui per aiutarti con le tue domande sul paracadutismo..."
             }
         }
 
