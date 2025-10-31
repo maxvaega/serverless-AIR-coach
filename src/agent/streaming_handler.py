@@ -60,7 +60,8 @@ class StreamingHandler:
                     
         except Exception as e:
             logger.error(f"Errore nello streaming con controllo tool: {e}")
-            yield f"data: {{'error': 'Errore nello streaming: {str(e)}'}}\n\n"
+            error_data = {"type": "error", "message": str(e)}
+            yield f"data: {json.dumps(error_data)}\n\n"
     
     def _reset_state(self):
         """Reset dello stato interno per nuovo streaming."""
