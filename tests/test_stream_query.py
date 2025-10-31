@@ -122,7 +122,7 @@ def test_stream_query_saves_tool_result():
     """
     user_id = "google-oauth2|104612087445133776110"
     payload = {
-        "message": "simuliamo l'esame di teoria",
+        "message": "fammi una domanda casuale di teoria",
         "userid": user_id,
     }
 
@@ -150,9 +150,11 @@ def test_stream_query_saves_tool_result():
                     continue
                 try:
                     payload_str = str(line)[len("data:"):].strip()
-                    # Rimuovi eventuali escape sequences alla fine
+                    # Rimuovi eventuali escape sequences alla fine (sia literal che encoded)
                     if payload_str.endswith('\\n\\n'):
                         payload_str = payload_str[:-4]
+                    elif payload_str.endswith('\n\n'):
+                        payload_str = payload_str[:-2]
                     evt = json.loads(payload_str)
                 except Exception:
                     continue
