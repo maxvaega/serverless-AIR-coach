@@ -320,6 +320,106 @@ Per la documentazione completa sui test, consultare [`tests/readme.md`](../tests
 - **Tool tests**: Copertura completa funzionalità quiz
 - **Performance tests**: Latenza e throughput
 
+## CI/CD - GitHub Actions Workflows
+
+Il progetto utilizza GitHub Actions per automazione di testing, code review e integrazione con Claude Code.
+
+### Workflow Implementati
+
+#### 1. Run Tests (`test.yml`)
+**Trigger**: Pull request e push su branch `main` e `develop`
+
+**Caratteristiche:**
+- **Ambiente**: Ubuntu latest + Python 3.11 con pip caching
+- **Strategia**: E2E testing con server FastAPI in background
+- **Coverage**: Report di copertura del codice con pytest-cov
+- **Ottimizzazioni**:
+  - Usa `gemini-2.5-flash-lite` per ridurre costi in CI
+  - Server startup con health check (`/api/test` endpoint)
+  - Timeout 60s per attesa server ready
+  - Cleanup automatico del processo server
+
+**Pipeline steps:**
+1. Setup environment (Python 3.11, dependencies)
+2. Start FastAPI server in background con tutte le env vars
+3. Health check con curl retry loop
+4. Run pytest con coverage e deselect di test specifici
+5. Upload coverage artifacts
+6. Cleanup server process
+
+**Secrets richiesti:**
+- Google: `GOOGLE_API_KEY`
+- LangSmith: `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT`
+- MongoDB: `MONGODB_URI`, `COLLECTION_NAME`
+- AWS: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- Auth0: `AUTH0_DOMAIN`, `AUTH0_SECRET`, `AUTH0_API_AUDIENCE`, `AUTH0_ISSUER`
+- Testing: `TEST_AUTH_TOKEN` (optional)
+
+#### 2. Claude Code Integration (`claude.yml`)
+**Trigger**: Mention `@claude` in issue/PR comments o body
+
+**Funzionalità:**
+- **AI-assisted development**: Integrazione diretta di Claude Code in GitHub
+- **Context-aware execution**: Accesso a tutte le env vars del progetto
+- **Permission model**: Read su contents/PRs/issues, write su id-token
+- **CI results reading**: Claude può leggere risultati dei workflow di test
+
+**Conditional execution:**
+```yaml
+if: contains(github.event.comment.body, '@claude') ||
+    contains(github.event.issue.body, '@claude')
+```
+
+**Use cases:**
+- Code generation su richiesta in issue/PR
+- Bug fixing assistito da AI
+- Documentation updates
+- Refactoring suggestions
+
+#### 3. Automated PR Review (`claude-code-review.yml`)
+**Trigger**: PR opened o synchronized (nuovo commit)
+
+**Review automatico su:**
+- **Code quality**: Best practices e standard del progetto
+- **Potential bugs**: Analisi statica e pattern detection
+- **Performance**: Ottimizzazioni e anti-patterns
+- **Security**: Vulnerabilità e secure coding
+- **Test coverage**: Verifica completezza test
+
+**Workflow:**
+1. Checkout repo con fetch-depth 1 (performance)
+2. Esegue Claude Code con prompt di review
+3. Usa `gh pr comment` per postare feedback come commento
+
+**Customization:**
+- Prompt personalizzato per review guidelines
+- Allowed tools limitati: `gh` commands per PR interaction
+- Usa CLAUDE.md per style e conventions del progetto
+
+### CI/CD Best Practices
+
+**Environment consistency:**
+- Stesse env vars in tutti i workflow per consistency
+- Regional config EU (europe-west8) anche in CI
+- Caching abilitato in tutti gli ambienti
+
+**Security:**
+- Secrets management via GitHub Secrets
+- Minimal permissions model (principle of least privilege)
+- No secrets in logs (masked automatically)
+
+**Performance optimizations:**
+- Pip caching per dependency installation
+- Fetch depth 1 per checkout veloce
+- Background server execution con health checks
+- Lite model in CI (`gemini-2.5-flash-lite`)
+
+**Quality gates:**
+- Mandatory test passage prima di merge
+- Coverage tracking con artifacts
+- Automated code review su ogni PR
+- Test deselection per test flaky (configurabile)
+
 ## Deployment Vercel - Ottimizzazioni Serverless
 
 ### Configurazione Deployment

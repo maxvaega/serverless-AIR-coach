@@ -33,6 +33,7 @@
 - **Commit style**: Descriptive commits with scope
 - **PR requirements**: Tests passing, documentation updated
 - **Code changes**: Always consult `/docs/Analisi funzionale.md` and `/docs/Analisi tecnica.md`
+- **CI/CD**: 3 GitHub workflows - automated testing (test.yml), Claude integration (@claude mentions), PR reviews (claude-code-review.yml)
 
 ## Documentation
 - **IMPORTANT:** check documentation when you need it, skip the files that are not necessary
