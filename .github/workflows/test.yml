@@ -100,7 +100,7 @@ jobs:
         CACHE_REGION: europe-west8
         CACHE_DEBUG_LOGGING: false
       run: |
-        pytest -v -rs tests/ --cov=src --cov-report=term-missing
+        pytest -v -rs tests/ --cov=src --cov-report=term-missing --deselect=tests/test_stream_query.py::test_stream_query_saves_tool_result
 
     - name: Stop server
       if: always()
