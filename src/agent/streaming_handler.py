@@ -2,7 +2,7 @@ import json
 from typing import AsyncGenerator, List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessageChunk
 
-from ..tools import _serialize_tool_output
+from .tools import _serialize_tool_output
 from ..utils import _extract_text
 import logging
 logger = logging.getLogger("uvicorn")

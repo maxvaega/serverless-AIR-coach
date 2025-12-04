@@ -122,7 +122,7 @@ def test_stream_query_saves_tool_result():
     """
     user_id = "google-oauth2|104612087445133776110"
     payload = {
-        "message": "fammi una domanda di teoria scelta casualmente. usa domanda_teoria",
+        "message": "fammi una domanda di teoria scelta casualmente",
         "userid": user_id,
     }
 
@@ -189,6 +189,13 @@ def test_stream_query_saves_tool_result():
     assert isinstance(tool_item, dict)
     # Supporta sia schema vecchio (name/result) sia nuovo (tool_name/data)
     name = tool_item.get("name") or tool_item.get("tool_name")
-    assert name == "domanda_teoria"
+    # Verifica che il tool sia uno dei quiz tool validi
+    valid_quiz_tools = [
+        "domanda_casuale_esame",
+        "domanda_casuale_capitolo",
+        "domanda_specifica",
+        "ricerca_domanda",
+    ]
+    assert name in valid_quiz_tools, f"Tool '{name}' non riconosciuto. Tool validi: {valid_quiz_tools}"
     result = tool_item.get("result") or tool_item.get("data")
     assert result is not None

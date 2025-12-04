@@ -3,7 +3,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 from ..env import FORCED_MODEL, HISTORY_LIMIT, VERTEX_AI_REGION, CACHE_DEBUG_LOGGING
-from ..tools import domanda_teoria
+from .tools import quiz_tools
 from ..history_hooks import build_llm_input_window_hook
 from ..prompt_personalization import get_personalized_prompt_for_user, generate_thread_id
 import logging
@@ -49,8 +49,8 @@ class AgentManager:
             # Parametri per ottimizzare caching implicito (automatico in Vertex AI)
         )
         
-        # Tools disponibili
-        tools = [domanda_teoria]
+        # Tools disponibili per il quiz
+        tools = quiz_tools
         
         # Prompt personalizzato per utente
         personalized_prompt, prompt_version, _ = get_personalized_prompt_for_user(
