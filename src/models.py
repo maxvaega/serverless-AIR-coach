@@ -57,7 +57,7 @@ class QuizOption(BaseModel):
 
 class QuizQuestion(BaseModel):
     """
-    Quiz question structure returned by domanda_teoria tool.
+    Quiz question structure returned by tools.
 
     Represents a complete parachuting theory exam question with multiple choice options.
     """
@@ -89,7 +89,7 @@ class SSEToolResult(BaseModel):
     """
     SSE event for tool execution result.
 
-    Sent when the AI agent executes a tool (e.g., domanda_teoria for quiz questions).
+    Sent when the AI agent executes a tool (e.g., domanda_casuale_esame for quiz questions).
     The data structure depends on the specific tool being executed.
     """
     type: Literal["tool_result"] = "tool_result"
@@ -101,7 +101,7 @@ class SSEToolResult(BaseModel):
         json_schema_extra = {
             "example": {
                 "type": "tool_result",
-                "tool_name": "domanda_teoria",
+                "tool_name": "domanda_casuale_esame",
                 "data": {
                     "capitolo": 1,
                     "capitolo_nome": "Meteorologia applicata al paracadutismo",

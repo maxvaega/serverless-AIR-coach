@@ -88,8 +88,9 @@ AIR Coach API is an intelligent chatbot platform designed to support theoretical
 **Streaming Response Format:**
 ```json
 {"type": "agent_message", "data": "AI response text"}
-{"type": "tool_result", "tool_name": "domanda_teoria", "data": {...}, "final": true}
+{"type": "tool_result", "tool_name": "domanda_casuale_esame", "data": {...}, "final": true}
 ```
+Note: tool_name can be one of: `domanda_casuale_esame`, `domanda_casuale_capitolo`, `domanda_specifica`, `ricerca_domanda`
 
 ### 2. `/api/update_docs` (POST)
 **Purpose**: Manual refresh of educational context

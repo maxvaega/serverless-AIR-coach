@@ -16,7 +16,7 @@ AIR Coach API uses a comprehensive testing approach with unit tests and end-to-e
 ```
 tests/
 ├── conftest.py                     # Pytest configuration and fixtures
-├── test_tools.py                   # Unit tests for domanda_teoria tool
+├── test_tools.py                   # Unit tests for quiz tools (4 specialized tools)
 ├── test_stream_query.py            # E2E tests for streaming endpoint
 ├── test_update_docs.py             # E2E tests for document refresh
 ├── test_history_hook.py            # Unit tests for history management
@@ -55,7 +55,7 @@ pytest -v -rs tests/test_caching.py            # Cache functionality tests
 pytest --cov=src tests/
 
 # Run specific test functions
-pytest -v tests/test_tools.py::test_domanda_teoria_random
+pytest -v tests/test_tools.py::test_domanda_casuale_esame
 pytest -v tests/test_stream_query.py::test_stream_query_basic
 ```
 
@@ -71,9 +71,9 @@ pytest -v tests/test_stream_query.py::test_stream_query_basic
 ## Unit Test Details
 
 ### Tool Testing (`test_tools.py`)
-- **Purpose**: Test `domanda_teoria` tool functionality
+- **Purpose**: Test quiz tools (`domanda_casuale_esame`, `domanda_casuale_capitolo`, `domanda_specifica`, `ricerca_domanda`)
 - **Mocking**: Complete MongoDB isolation with mock data
-- **Coverage**: All tool modes (random, chapter, specific, search)
+- **Coverage**: All tool modes (random exam, chapter-specific, specific question, text search)
 - **Validation**: JSON output structure and content
 
 ### History Management (`test_history_hook.py`, `test_history_window.py`)

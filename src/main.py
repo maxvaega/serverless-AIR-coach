@@ -101,12 +101,12 @@ async def stream_endpoint(
 
     ### Event Type 2: `tool_result`
 
-    Result from tool execution. Currently, the main tool is **domanda_teoria** for quiz questions.
+    Result from tool execution. Currently, the main tools are for quiz questions.
 
     ```json
     data: {
       "type": "tool_result",
-      "tool_name": "domanda_teoria",
+      "tool_name": "domanda_casuale_esame",
       "data": {
         "capitolo": 1,
         "capitolo_nome": "Meteorologia applicata al paracadutismo",

@@ -23,7 +23,7 @@
 
 ## Architecture Patterns
 - **Entry point**: `run.py` (Vercel) + `src/main.py` (FastAPI app)
-- **Core files**: `src/rag.py` (orchestrator), `src/tools.py` (quiz tool)
+- **Core files**: `src/rag.py` (orchestrator), `src/agent/tools.py` (4 quiz tools)
 - **Agent creation**: Per-request via `AgentManager.create_agent()`
 - **Memory**: InMemorySaver (hot) + MongoDB (cold), rolling window via pre_model_hook
 - **Threading**: `f"{userid}:v{prompt_version}"` for conversation isolation
@@ -47,6 +47,6 @@
 - **Testing order**: Unit tests first, then E2E with running server
 - **LangGraph tools**: Use MCP servers (Langchain, context7) for library documentation
 - **Authentication**: Auth0 JWT required for `/api/stream_query` endpoint
-- **Tool output**: `domanda_teoria` returns JSON (not string) for quiz questions
+- **Tool output**: Quiz tools (`domanda_casuale_esame`, `domanda_casuale_capitolo`, `domanda_specifica`, `ricerca_domanda`) return JSON for quiz questions
 - **Event loop**: Factory pattern prevents "Event loop is closed" in serverless
 - **Documentation location**: Technical docs in `/docs/`

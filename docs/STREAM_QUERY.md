@@ -71,7 +71,7 @@ data: {
 ```json
 data: {
   "type": "tool_start",
-  "tool_name": "domanda_teoria",
+  "tool_name": "domanda_casuale_esame",
   "input": {...}
 }
 ```
@@ -84,7 +84,7 @@ data: {
 ```json
 data: {
   "type": "tool_result",
-  "tool_name": "domanda_teoria",
+  "tool_name": "domanda_casuale_esame",
   "data": {
     "domanda": "Qual � la differenza tra...",
     "opzioni": ["A) ...", "B) ...", "C) ...", "D) ..."],
@@ -97,7 +97,7 @@ data: {
 **Caratteristiche**:
 - Singolo evento per tool eseguito
 - `data` contiene l'output serializzato del tool
-- Per `domanda_teoria`: output � JSON strutturato (non stringa)
+- Per quiz tools (`domanda_casuale_esame`, `domanda_casuale_capitolo`, `domanda_specifica`, `ricerca_domanda`): output è JSON strutturato (non stringa)
 - Campo `final: true` indica completamento tool
 - Riferimento: [streaming_handler.py:91-115](../src/agent/streaming_handler.py#L91-L115)
 
@@ -117,7 +117,7 @@ data: {
 ### **Scenario 2: Esecuzione Tool + Risposta**
 ```
 1. [Tool Start - non inviato, solo log server]
-2. data: {"type": "tool_result", "tool_name": "domanda_teoria", "data": {...}, "final": true}
+2. data: {"type": "tool_result", "tool_name": "domanda_casuale_esame", "data": {...}, "final": true}
 3. data: {"type": "agent_message", "data": "Ho"}
 4. data: {"type": "agent_message", "data": " generato"}
 5. data: {"type": "agent_message", "data": " una domanda per te."}
@@ -200,7 +200,7 @@ Content-Type: application/json
 HTTP/1.1 200 OK
 Content-Type: text/event-stream
 
-data: {"type":"tool_result","tool_name":"domanda_teoria","data":{"domanda":"Secondo la normativa ENAC...","opzioni":["A) ...","B) ...","C) ...","D) ..."],"risposta_corretta":"B"},"final":true}
+data: {"type":"tool_result","tool_name":"ricerca_domanda","data":{"domanda":"Secondo la normativa ENAC...","opzioni":["A) ...","B) ...","C) ...","D) ..."],"risposta_corretta":"B"},"final":true}
 
 data: {"type":"agent_message","data":"Ho"}
 

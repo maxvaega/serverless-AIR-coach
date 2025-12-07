@@ -10,7 +10,7 @@ AIR Coach API is a FastAPI-based application designed for handling chatbot inter
 - **User information**: reads data from Auth0 and adds it to the system prompt (not as chat messages)
 - **LLM Model**: Gemini 2.5 Flash
 - **LangGraph Integration**: AI agents with custom tools for quiz management
-- **Quiz Management Tool**: `domanda_teoria` tool for retrieving and searching quiz questions
+- **Quiz Management Tools**: 4 specialized tools for quiz operations (`domanda_casuale_esame`, `domanda_casuale_capitolo`, `domanda_specifica`, `ricerca_domanda`)
  - **Rolling conversation window (pre_model_hook)**: the LLM only receives the last `HISTORY_LIMIT` turns; graph state `messages` is never trimmed
 
 ## Requirements
@@ -67,3 +67,4 @@ The `monitor_api.py` script provides continuous monitoring of the API health end
 - 2025/09: rolling window via pre_model_hook, prompt personalization in system prompt, versioned thread_id, no trimming of graph state in warm path
 - 2025/09: refactoring file names, logging and env variables. run.py as an entrypoint and fastapi logic as an src.main.
 - 2025/09: moved inference to europe-west8 (Milan) + caching in Gemini
+- 2025/12: refactored domanda_teoria into 4 specialized tools for better LLM usage

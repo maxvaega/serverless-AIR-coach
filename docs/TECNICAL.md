@@ -41,7 +41,7 @@ src/
 ├── models.py                       # Pydantic models (MessageRequest, MessageResponse)
 ├── auth.py                         # VerifyToken JWT Auth0
 ├── database.py                     # MongoDB CRUD operations
-├── tools.py                        # LangGraph tools (domanda_teoria)
+├── agent/tools.py                  # LangGraph quiz tools (4 specialized tools)
 └── env.py                          # Pydantic Settings configuration
 ```
 
@@ -151,26 +151,37 @@ class StreamingHandler:
 
 ### Tool Processing Pipeline
 
-#### domanda_teoria Tool
+#### Quiz Tools (4 Specialized Tools)
 ```python
-# src/tools.py
+# src/agent/tools.py
 @tool(return_direct=True)
-def domanda_teoria(capitolo=None, domanda=None, testo=None) -> dict:
-    # Tool LangGraph per quiz management
-    # 4 modalità: casuale, per capitolo, specifica, ricerca testuale
+def domanda_casuale_esame() -> dict:
+    # Domanda casuale per simulazione esame (nessun parametro)
+
+@tool(return_direct=True)
+def domanda_casuale_capitolo(capitolo: int) -> dict:
+    # Domanda casuale da un capitolo specifico
+
+@tool(return_direct=True)
+def domanda_specifica(capitolo: int, numero: int) -> dict:
+    # Domanda specifica per capitolo e numero
+
+@tool(return_direct=True)
+def ricerca_domanda(testo: str) -> dict:
+    # Ricerca domande per argomento o testo
 ```
 
 **Architettura tool:**
-- **LangGraph integration**: Decoratore `@tool` per agent
-- **Validazione robusta**: Input validation e error handling
-- **Priorità parametri**: Logica mutually exclusive
-- **JSON output**: Struttura standardizzata per client
+- **LangGraph integration**: Decoratore `@tool` per ogni tool specializzato
+- **Validazione robusta**: Input validation specifica per ogni modalità
+- **Nomi parlanti**: Tool names esplicitano la funzionalità (migliora utilizzo LLM)
+- **JSON output**: Struttura standardizzata identica per tutti i tool
 
 #### Flusso Tool Events
-1. **Invocazione**: Agente decide di usare tool
+1. **Invocazione**: Agente decide quale tool quiz usare (es. `domanda_casuale_esame`)
 2. **Event capture**: `StreamingHandler._handle_tool_end()`
 3. **Serializzazione**: `_serialize_tool_output()` per JSON compatibility
-4. **Streaming**: Event `{"type": "tool_result", "tool_name": "...", "data": {...}}`
+4. **Streaming**: Event `{"type": "tool_result", "tool_name": "domanda_casuale_esame", "data": {...}}`
 5. **Return-direct handling**: Stream termina dopo tool_result se return_direct=True
 6. **Persistenza**: `ConversationPersistence.save_conversation()`
 
@@ -278,7 +289,7 @@ src/services/database/
   "human": "domanda utente",
   "system": "risposta AI",
   "tool": {                          // opzionale
-    "tool_name": "domanda_teoria",
+    "tool_name": "domanda_casuale_esame",  // o altro quiz tool
     "data": {...}                    // output serializzato
   },
   "userId": "user_id",
