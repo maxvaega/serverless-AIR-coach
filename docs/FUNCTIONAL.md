@@ -12,7 +12,7 @@ AIR Coach API is an intelligent chatbot platform designed to support theoretical
 - **Dynamic content loading** from external educational sources
 - **Personalized learning** adapted to user profiles
 
-**Technology Stack**: Serverless deployment (Vercel) with Google Gemini 2.5 Flash LLM for contextual, accurate responses.
+**Technology Stack**: Serverless deployment (Vercel) with Google Gemini 3 Flash LLM for contextual, accurate responses.
 
 ## Core Features
 
@@ -175,7 +175,7 @@ Reference `.env.example` for complete configuration:
 - `AUTH0_DOMAIN`, `AUTH0_SECRET`, `AUTH0_API_AUDIENCE`: Authentication
 
 **Optional:**
-- `FORCED_MODEL`: Specific LLM model (default: gemini-2.5-flash)
+- `FORCED_MODEL`: Specific LLM model (default: gemini-3-flash)
 - `HISTORY_LIMIT`: Memory message limit (default: 10)
 - `VERTEX_AI_REGION`: Google Cloud region (default: europe-west8)
 
@@ -213,7 +213,7 @@ For complete testing documentation, see [`tests/readme.md`](../tests/readme.md).
 - **Platform**: Vercel Serverless
 - **Database**: MongoDB Atlas
 - **Storage**: AWS S3
-- **LLM**: Google Gemini 2.5 Flash
+- **LLM**: Google Gemini 3 Flash
 - **Authentication**: Auth0
 
 ### Monitoring

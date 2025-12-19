@@ -8,7 +8,7 @@ AIR Coach API is a FastAPI-based application designed for handling chatbot inter
 - **Docs update Endpoint**: refreshes the docs in cache to updated the LLM context
 - **AWS S3 Context load**: dinamically loads context from .md files hosted in AWS S3
 - **User information**: reads data from Auth0 and adds it to the system prompt (not as chat messages)
-- **LLM Model**: Gemini 2.5 Flash
+- **LLM Model**: Gemini 3 Flash
 - **LangGraph Integration**: AI agents with custom tools for quiz management
 - **Quiz Management Tool**: `domanda_teoria` tool for retrieving and searching quiz questions
  - **Rolling conversation window (pre_model_hook)**: the LLM only receives the last `HISTORY_LIMIT` turns; graph state `messages` is never trimmed

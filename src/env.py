@@ -10,7 +10,7 @@ load_dotenv(override=True)
 class Settings(BaseSettings):
     # LLM Configuration
     GOOGLE_API_KEY: str = os.getenv('GOOGLE_API_KEY', '')
-    FORCED_MODEL: str = os.getenv("FORCED_MODEL", "models/gemini-2.5-flash")
+    FORCED_MODEL: str = os.getenv("FORCED_MODEL", "models/gemini-3-flash-preview")  # Modello LLM forzato se variabile non presente
 
     # Google Cloud Regional Configuration
     VERTEX_AI_REGION: str = os.getenv("VERTEX_AI_REGION", "europe-west8")  # Milano - region per inferenza Gemini

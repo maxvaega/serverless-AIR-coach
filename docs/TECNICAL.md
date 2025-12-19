@@ -5,7 +5,7 @@
 
 ## Architecture Overview
 
-AIR Coach API is a serverless application built on **FastAPI** with refactored modular architecture, deployed on **Vercel**. The system integrates **LangGraph** for AI agent management, **Google Gemini 2.5 Flash** as LLM model, **MongoDB** for persistence, and **AWS S3** for dynamic context loading.
+AIR Coach API is a serverless application built on **FastAPI** with refactored modular architecture, deployed on **Vercel**. The system integrates **LangGraph** for AI agent management, **Google Gemini 3 Flash** as LLM model, **MongoDB** for persistence, and **AWS S3** for dynamic context loading.
 
 ### Key Architectural Characteristics
 
@@ -334,7 +334,6 @@ Il progetto utilizza GitHub Actions per automazione di testing, code review e in
 - **Strategia**: E2E testing con server FastAPI in background
 - **Coverage**: Report di copertura del codice con pytest-cov
 - **Ottimizzazioni**:
-  - Usa `gemini-2.5-flash-lite` per ridurre costi in CI
   - Server startup con health check (`/api/test` endpoint)
   - Timeout 60s per attesa server ready
   - Cleanup automatico del processo server
@@ -412,7 +411,6 @@ if: contains(github.event.comment.body, '@claude') ||
 - Pip caching per dependency installation
 - Fetch depth 1 per checkout veloce
 - Background server execution con health checks
-- Lite model in CI (`gemini-2.5-flash-lite`)
 
 **Quality gates:**
 - Mandatory test passage prima di merge
