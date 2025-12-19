@@ -43,6 +43,7 @@ class AgentManager:
         # Configurazione ottimizzata per caching implicito con region unificata
         llm = ChatGoogleGenerativeAI(
             model=model,
+            thinking_level="low", #Solo per Gemini 3
             temperature=0.7,
             # CRITICO: Stessa region per inferenza e cache per massimizzare cache hits
             location=VERTEX_AI_REGION,  # "europe-west8"
