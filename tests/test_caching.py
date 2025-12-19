@@ -143,13 +143,13 @@ class TestCacheMonitoring:
     def test_log_request_context(self):
         """Test logging contesto richiesta"""
         with patch('src.monitoring.cache_monitor.logger') as mock_logger:
-            log_request_context("test_user", "gemini-2.5-flash", "europe-west8")
+            log_request_context("test_user", "gemini-3-flash-preview", "europe-west8")
 
             # Verifica che il log sia stato chiamato
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             assert "test_user" in call_args
-            assert "gemini-2.5-flash" in call_args
+            assert "gemini-3-flash-preview" in call_args
             assert "europe-west8" in call_args
 
     def test_analyze_cache_effectiveness(self):

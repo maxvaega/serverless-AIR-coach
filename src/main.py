@@ -16,7 +16,7 @@ auth = VerifyToken()
 
 app = FastAPI(
     title='AIR Coach API',
-    version='0.3',
+    version='0.4',
     description='''
 # AIR Coach API
 
