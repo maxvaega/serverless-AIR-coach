@@ -130,8 +130,10 @@ def _ask_async(agent_executor, config, query: str, user_id: str, chat_history: b
         
         # Gestione streaming con handler dedicato
         streaming_handler = StreamingHandler()
+        message_id = f"{user_id}_{datetime.datetime.now().isoformat(timespec='milliseconds')}"
         
         try:
+            logger.info(f"STREAM - Inizio gestione streaming per messaggio ID: {message_id}")
             async for chunk in streaming_handler.handle_stream_events(agent_executor, query, config):
                 yield chunk
                 
@@ -154,7 +156,7 @@ def _ask_async(agent_executor, config, query: str, user_id: str, chat_history: b
             
             # Log completamento e persistenza
             ConversationPersistence.log_run_completion(response, tool_records, serialized_output)
-            ConversationPersistence.save_conversation(query, response, user_id, tool_records)
+            ConversationPersistence.save_conversation(query, response, user_id, tool_records, message_id)
     
     return stream_response()
 
