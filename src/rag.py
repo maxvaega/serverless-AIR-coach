@@ -4,7 +4,7 @@ Handles agent creation and query processing with streaming support.
 """
 import datetime
 import json
-from typing import AsyncGenerator, Optional, Union, Any
+from typing import AsyncGenerator, Optional, Union
 
 from langchain_core.messages import HumanMessage
 
@@ -21,12 +21,9 @@ import logging
 logger = logging.getLogger("uvicorn")
 
 
-# Module-level state for backward compatibility (not used in serverless per-request pattern)
+# Module-level cache for document/prompt content (refreshed via update_docs endpoint)
 combined_docs: str = ""
 system_prompt: str = ""
-llm: Optional[Any] = None
-checkpointer: Optional[Any] = None
-agent_executor = None
 
 
 def generate_message_id(user_id: str) -> str:
@@ -116,4 +113,3 @@ def _ask_streaming(agent_executor, config, query: str, user_id: str, chat_histor
 
 # Re-export for unit tests
 from .history_hooks import build_llm_input_window_hook
-build_llm_input_window_hook = build_llm_input_window_hook

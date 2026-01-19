@@ -17,12 +17,9 @@ def build_llm_input_window_hook(max_turns: int = HISTORY_LIMIT):
         messages = state.get("messages", [])
         try:
             window = last_n_turns(messages, max_turns)
-            try:
-                logger.debug(
-                    f"PRE_MODEL_HOOK - total={len(messages)} -> window={len(window)} turns={max_turns}"
-                )
-            except Exception:
-                pass
+            logger.debug(
+                f"PRE_MODEL_HOOK - total={len(messages)} -> window={len(window)} turns={max_turns}"
+            )
             return {"llm_input_messages": window}
         except Exception as e:
             logger.error(f"pre_model_hook error: {e}")

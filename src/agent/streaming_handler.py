@@ -69,23 +69,12 @@ class StreamingHandler:
         self.serialized_output = None
     
     async def _handle_tool_start(self, event: Dict) -> AsyncGenerator[str, None]:
-        """Gestisce l'evento di inizio esecuzione tool."""
+        """Gestisce l'evento di inizio esecuzione tool (logging only)."""
         tool_name = event.get("name")
         tool_input = event.get("data", {}).get("input", {})
         logger.info(f"TOOL - {tool_name} started with input: {tool_input}")
-        
-        # Decommentare per inviare evento tool start al client
-        # start_message = {
-        #     "type": "tool_start",
-        #     "tool_name": tool_name,
-        #     "input": tool_input
-        # }
-        # yield f"data: {json.dumps(start_message)}\\n\\n"
-        
-        # Per compatibilità con codice esistente, non yieldiamo nulla
-        # Questo è un async generator che non produce output
-        if False:
-            yield
+        return
+        yield  # Makes this an async generator
     
     async def _handle_tool_end(self, event: Dict) -> AsyncGenerator[str, None]:
         """Gestisce l'evento di fine esecuzione tool."""
