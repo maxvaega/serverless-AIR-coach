@@ -49,7 +49,6 @@ def ask(
     query: str,
     user_id: str,
     chat_history: bool = False,
-    stream: bool = False,
     user_data: bool = False,
     token: Optional[str] = None,
 ) -> Union[str, AsyncGenerator[str, None]]:
@@ -69,20 +68,8 @@ def ask(
         checkpointer=checkpointer
     )
 
-    if stream:
-        return _ask_streaming(agent_executor, config, query, user_id, chat_history)
-    return _ask_sync(agent_executor, config, query, user_id, chat_history)
+    return _ask_streaming(agent_executor, config, query, user_id, chat_history) # Async streaming - Streaming = False non gestito
 
-
-def _ask_sync(agent_executor, config, query: str, user_id: str, chat_history: bool) -> str:
-    """Handle synchronous agent invocation."""
-    try:
-        MemorySeeder.seed_agent_memory(agent_executor, config, user_id, chat_history)
-        result = agent_executor.invoke({"messages": [HumanMessage(query)]}, config=config)
-        return result["messages"][-1].content
-    except Exception as e:
-        logger.error(f"Errore nell'invocare l'agente: {e}")
-        return "Errore nell'invocare l'agente."
 
 
 def _ask_streaming(agent_executor, config, query: str, user_id: str, chat_history: bool) -> AsyncGenerator[str, None]:
@@ -94,7 +81,7 @@ def _ask_streaming(agent_executor, config, query: str, user_id: str, chat_histor
         message_id = generate_message_id(user_id)
 
         try:
-            logger.info(f"STREAM - Inizio gestione streaming per messaggio ID: {message_id}")
+            logger.info(f"STREAM - Inizio gestione streaming per messaggio con ID= {message_id}")
             async for chunk in streaming_handler.handle_stream_events(agent_executor, query, config):
                 yield chunk
         finally:

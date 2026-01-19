@@ -127,9 +127,6 @@ class MemorySeeder:
                 tool_call_id=f"call_{tool_name}_{msg.get('timestamp', 'unknown')}"
             )
             
-            logger.info(
-                f"HISTORY DEBUG - ToolMessage aggiunto al seeding: tool={tool_name}, content_len={len(content_str)}"
-            )
             return tool_message
             
         except Exception as te:
