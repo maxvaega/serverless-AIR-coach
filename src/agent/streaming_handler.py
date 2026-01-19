@@ -3,7 +3,6 @@ from typing import AsyncGenerator, List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessageChunk
 
 from ..tools import _serialize_tool_output
-from ..utils import _extract_text
 import logging
 logger = logging.getLogger("uvicorn")
 
@@ -118,7 +117,7 @@ class StreamingHandler:
         """Gestisce l'evento di streaming del modello."""
         chunk = event["data"].get("chunk")
         if isinstance(chunk, AIMessageChunk):
-            content_text = _extract_text(chunk.content)
+            content_text = chunk.text()
             if content_text:
                 self.response_chunks.append(content_text)
                 ai_response = {
