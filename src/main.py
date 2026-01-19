@@ -94,9 +94,9 @@ async def stream_endpoint(
     Incremental text chunks from the AI response. Clients should concatenate these to build the complete message.
 
     ```json
-    data: {"type": "agent_message", "data": "Ecco"}
-    data: {"type": "agent_message", "data": " una"}
-    data: {"type": "agent_message", "data": " domanda..."}
+    data: {"type": "agent_message", "data": "Ecco", "message_id": "userid_2026-01-19T14:26:03.779"}
+    data: {"type": "agent_message", "data": " una", "message_id": "userid_2026-01-19T14:26:03.779"}
+    data: {"type": "agent_message", "data": " domanda...", "message_id": "userid_2026-01-19T14:26:03.779"}
     ```
 
     ### Event Type 2: `tool_result`
@@ -119,7 +119,8 @@ async def stream_endpoint(
         ],
         "risposta_corretta": "A"
       },
-      "final": true
+      "final": true,
+      "message_id": "userid_2026-01-19T14:26:03.779"
     }
     ```
 

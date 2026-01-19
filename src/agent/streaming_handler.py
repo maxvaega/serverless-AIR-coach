@@ -12,11 +12,14 @@ class StreamingHandler:
     Gestisce gli eventi di streaming dell'agente LangGraph e l'elaborazione dei tool.
     """
     
-    def __init__(self):
+    def __init__(self, message_id: str):
+        if not message_id:
+            raise ValueError("message_id is required for StreamingHandler")
         self.response_chunks: List[str] = []
         self.tool_records: List[Dict] = []
         self.tool_executed = False
         self.serialized_output = None
+        self.message_id = message_id  # REQUIRED: Store for chunk injection
     
     async def handle_stream_events(
         self, 
@@ -82,22 +85,23 @@ class StreamingHandler:
         tool_name = event.get("name")
         tool_data = event.get("data", {})
         tool_output = tool_data.get("output")
-        
+
         if tool_output:
             # Serializza correttamente l'output del tool
             self.serialized_output = _serialize_tool_output(tool_output)
-            
+
             tool_record = {
                 "tool_name": tool_name,
                 "data": self.serialized_output
             }
             self.tool_records.append(tool_record)
-            
+
             structured_response = {
                 "type": "tool_result",
                 "tool_name": tool_name,
                 "data": self.serialized_output,
-                "final": True
+                "final": True,
+                "message_id": self.message_id  # REQUIRED field
             }
             yield f"data: {json.dumps(structured_response)}\n\n"
             logger.info(f"TOOL - {tool_name} output processed")
@@ -111,7 +115,8 @@ class StreamingHandler:
                 self.response_chunks.append(content_text)
                 ai_response = {
                     "type": "agent_message",
-                    "data": content_text
+                    "data": content_text,
+                    "message_id": self.message_id  # REQUIRED field
                 }
                 yield f"data: {json.dumps(ai_response)}\n\n"
     

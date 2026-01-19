@@ -77,8 +77,8 @@ def _ask_streaming(agent_executor, config, query: str, user_id: str, chat_histor
 
     async def stream_response():
         MemorySeeder.seed_agent_memory(agent_executor, config, user_id, chat_history)
-        streaming_handler = StreamingHandler()
-        message_id = generate_message_id(user_id)
+        message_id = generate_message_id(user_id)  # MOVED: Generate before handler
+        streaming_handler = StreamingHandler(message_id=message_id)  # MODIFIED: Pass to handler
 
         try:
             logger.info(f"STREAM - Inizio gestione streaming per messaggio con ID= {message_id}")

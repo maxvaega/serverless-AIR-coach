@@ -39,12 +39,14 @@ class SSEAgentMessage(BaseModel):
     """
     type: Literal["agent_message"] = "agent_message"
     data: str = Field(..., description="Text chunk from AI response")
+    message_id: str = Field(..., description="Unique message identifier for correlation")  # NEW - REQUIRED
 
     class Config:
         json_schema_extra = {
             "example": {
                 "type": "agent_message",
-                "data": "Ciao! Sono AIR Coach, sono qui per aiutarti con le tue domande sul paracadutismo..."
+                "data": "Ciao! Sono AIR Coach, sono qui per aiutarti con le tue domande sul paracadutismo...",
+                "message_id": "google-oauth2|104612087445133776110_2026-01-19T14:26:03.779"  # NEW
             }
         }
 
@@ -96,6 +98,7 @@ class SSEToolResult(BaseModel):
     tool_name: str = Field(..., description="Name of the executed tool")
     data: Dict[str, Any] = Field(..., description="Tool output (structure depends on tool type)")
     final: bool = Field(True, description="Indicates completion of tool execution")
+    message_id: str = Field(..., description="Unique message identifier for correlation")  # NEW - REQUIRED
 
     class Config:
         json_schema_extra = {
@@ -114,7 +117,8 @@ class SSEToolResult(BaseModel):
                     ],
                     "risposta_corretta": "A"
                 },
-                "final": True
+                "final": True,
+                "message_id": "google-oauth2|104612087445133776110_2026-01-19T14:26:03.779"  # NEW
             }
         }
 

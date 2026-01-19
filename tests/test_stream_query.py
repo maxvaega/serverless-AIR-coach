@@ -192,3 +192,68 @@ def test_stream_query_saves_tool_result():
     assert name == "domanda_teoria"
     result = tool_item.get("result") or tool_item.get("data")
     assert result is not None
+
+
+def test_message_id_required_and_consistent():
+    """
+    Test E2E: Verifica che:
+    1. Tutti i chunk abbiano il campo 'message_id'
+    2. Tutti i chunk in una singola richiesta abbiano lo STESSO message_id
+    3. Il formato del message_id corrisponda al pattern atteso: {userid}_{ISO_timestamp}
+    """
+    user_id = "google-oauth2|104612087445133776110"
+    payload = {
+        "message": "Ciao, chi sei?",
+        "userid": user_id,
+    }
+
+    token = get_test_auth_token()
+    if not token:
+        pytest.skip("Token di autenticazione non configurato e generazione automatica fallita")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "accept": "application/json",
+    }
+
+    message_ids = []
+    chunk_count = 0
+
+    with httpx.Client(timeout=30) as client:
+        with client.stream("POST", f"{API_URL}/stream_query", json=payload, headers=headers) as r:
+            assert r.status_code == 200
+            for line in r.iter_lines():
+                if not line or not str(line).startswith("data:"):
+                    continue
+                try:
+                    payload_str = str(line)[len("data:"):].strip()
+                    # Rimuovi eventuali escape sequences
+                    if payload_str.endswith('\\n\\n'):
+                        payload_str = payload_str[:-4]
+                    elif payload_str.endswith('\n\n'):
+                        payload_str = payload_str[:-2]
+                    evt = json.loads(payload_str)
+                except Exception:
+                    continue
+
+                chunk_count += 1
+                # Verifica che ogni chunk abbia il campo message_id
+                assert "message_id" in evt, f"Chunk #{chunk_count} manca del campo 'message_id': {evt}"
+                message_id = evt["message_id"]
+                message_ids.append(message_id)
+
+                # Verifica formato: {userid}_{timestamp_ISO}
+                assert message_id.startswith(user_id), \
+                    f"message_id '{message_id}' non inizia con user_id '{user_id}'"
+                assert "_" in message_id, f"message_id '{message_id}' non contiene '_'"
+
+    # Verifica che abbiamo ricevuto almeno un chunk
+    assert chunk_count > 0, "Nessun chunk ricevuto nello stream"
+
+    # Verifica che tutti i message_id siano identici
+    unique_message_ids = set(message_ids)
+    assert len(unique_message_ids) == 1, \
+        f"message_id non consistente: trovati {len(unique_message_ids)} valori diversi: {unique_message_ids}"
+
+    print(f"✓ Test passed: {chunk_count} chunks, tutti con message_id identico: {message_ids[0]}")
