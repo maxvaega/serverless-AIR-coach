@@ -3,7 +3,6 @@ from typing import AsyncGenerator, List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessageChunk
 
 from ..tools import _serialize_tool_output
-from ..utils import _extract_text
 import logging
 logger = logging.getLogger("uvicorn")
 
@@ -70,23 +69,12 @@ class StreamingHandler:
         self.serialized_output = None
     
     async def _handle_tool_start(self, event: Dict) -> AsyncGenerator[str, None]:
-        """Gestisce l'evento di inizio esecuzione tool."""
+        """Gestisce l'evento di inizio esecuzione tool (logging only)."""
         tool_name = event.get("name")
         tool_input = event.get("data", {}).get("input", {})
         logger.info(f"TOOL - {tool_name} started with input: {tool_input}")
-        
-        # Decommentare per inviare evento tool start al client
-        # start_message = {
-        #     "type": "tool_start",
-        #     "tool_name": tool_name,
-        #     "input": tool_input
-        # }
-        # yield f"data: {json.dumps(start_message)}\\n\\n"
-        
-        # Per compatibilità con codice esistente, non yieldiamo nulla
-        # Questo è un async generator che non produce output
-        if False:
-            yield
+        return
+        yield  # Makes this an async generator
     
     async def _handle_tool_end(self, event: Dict) -> AsyncGenerator[str, None]:
         """Gestisce l'evento di fine esecuzione tool."""
@@ -118,7 +106,7 @@ class StreamingHandler:
         """Gestisce l'evento di streaming del modello."""
         chunk = event["data"].get("chunk")
         if isinstance(chunk, AIMessageChunk):
-            content_text = _extract_text(chunk.content)
+            content_text = chunk.text()
             if content_text:
                 self.response_chunks.append(content_text)
                 ai_response = {

@@ -1,6 +1,8 @@
 import datetime
 from typing import List, Dict, Optional, Any
 
+from pymongo.errors import DuplicateKeyError
+
 from ..env import DATABASE_NAME, COLLECTION_NAME
 from ..database import insert_data
 import logging
@@ -17,7 +19,8 @@ class ConversationPersistence:
         query: str,
         response: str,
         user_id: str, 
-        tool_records: Optional[List[Dict]] = None
+        tool_records: Optional[List[Dict]] = None,
+        message_id: Optional[str] = None
     ) -> bool:
         """
         Salva una conversazione (query + response) su MongoDB.
@@ -38,6 +41,7 @@ class ConversationPersistence:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         data = {
+            "_id": message_id,
             "human": query,
             "system": response,
             "userId": user_id,
@@ -49,10 +53,22 @@ class ConversationPersistence:
             data["tool"] = tool_records[-1]
         
         try:
-            insert_data(DATABASE_NAME, COLLECTION_NAME, data)
-            logger.info(f"DB - Risposta inserita nella collection: {DATABASE_NAME} - {COLLECTION_NAME}")
+            message_id = insert_data(DATABASE_NAME, COLLECTION_NAME, data)
+            logger.info(f"DB - Risposta {message_id} inserita nella collection: {DATABASE_NAME} - {COLLECTION_NAME}")
             return True
-            
+
+        except DuplicateKeyError as e:
+            logger.error(f"DB - Duplicate message_id detected: {message_id}. {e}")
+            # Fallback: let MongoDB generate ObjectId
+            data["_id"] = None
+            try:
+                message_id = insert_data(DATABASE_NAME, COLLECTION_NAME, data)
+                logger.info(f"DB - Risposta {message_id} inserita nella collection con ObjectId auto-generato: {DATABASE_NAME} - {COLLECTION_NAME}")
+                return True
+            except Exception as retry_error:
+                logger.error(f"DB - Errore durante il retry con ObjectId auto-generato: {retry_error}")
+                return False
+
         except Exception as e:
             logger.error(f"DB - Errore nell'inserire i dati nella collection: {e}")
             return False

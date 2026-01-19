@@ -27,14 +27,11 @@ def last_n_turns(messages: List[BaseMessage], n_turns: int) -> List[BaseMessage]
 
     start_human_idx = human_indices[-n_turns] if len(human_indices) >= n_turns else human_indices[0]
     window = messages[start_human_idx:]
-    try:
-        logger.debug(
-            f"HISTORY_WINDOW - total_msgs={len(messages)} start_idx={start_human_idx} "
-            f"window_size={len(window)} human_count={len(human_indices)} "
-            f"turns_kept={min(n_turns, len(human_indices))}"
-        )
-    except Exception:
-        pass
+    logger.debug(
+        f"HISTORY_WINDOW - total_msgs={len(messages)} start_idx={start_human_idx} "
+        f"window_size={len(window)} human_count={len(human_indices)} "
+        f"turns_kept={min(n_turns, len(human_indices))}"
+    )
     return window
 
 

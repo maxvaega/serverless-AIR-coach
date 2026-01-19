@@ -133,7 +133,7 @@ async def stream_endpoint(
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
         logger.info(f"Request received: \ntoken_len= {len(token)}\nmessage= {request.message}\nuserid= {request.userid}")
-        stream_response = ask(request.message, request.userid, chat_history=True, stream=True, user_data=True)
+        stream_response = ask(request.message, request.userid, chat_history=True, user_data=True)
         logger.info("Starting streaming response...")
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
