@@ -14,6 +14,9 @@ import json
 from unittest.mock import Mock, patch
 from typing import Dict, Any, Optional
 
+# Mark all tests in this file as unit tests (fast, mocked)
+pytestmark = pytest.mark.unit
+
 # Importa il tool da testare
 from src.tools import domanda_teoria
 

@@ -51,9 +51,9 @@ def ask(
     chat_history: bool = False,
     user_data: bool = False,
     token: Optional[str] = None,
-) -> Union[str, AsyncGenerator[str, None]]:
+) -> AsyncGenerator[str, None]:
     """
-    Process a query via LangGraph agent and return response, optionally streaming.
+    Process a query via LangGraph agent and return streaming response.
     """
     initialize_agent_state()
 

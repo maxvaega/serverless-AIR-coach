@@ -1,4 +1,8 @@
+import pytest
 from src.prompt_personalization import build_personalized_prompt, generate_thread_id
+
+# Mark all tests in this file as unit tests (fast, mocked)
+pytestmark = pytest.mark.unit
 
 
 def test_build_personalized_prompt_concat():

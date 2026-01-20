@@ -5,6 +5,9 @@ import json
 from src.env import DATABASE_NAME, COLLECTION_NAME
 from src.database import get_collection
 
+# Mark all tests in this file as e2e (require manual server)
+pytestmark = pytest.mark.e2e
+
 API_URL = os.getenv("API_URL", "http://localhost:8080/api")
 
 # Configurazione dell'URL API per i test - Scegliere l'URL API in base all'ambiente:

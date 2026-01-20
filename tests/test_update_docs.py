@@ -2,6 +2,9 @@ import pytest
 import httpx
 import os
 
+# Mark all tests in this file as e2e (require manual server)
+pytestmark = pytest.mark.e2e
+
 API_URL = os.getenv("API_URL", "http://localhost:8080/api")
 
 # Inserire qui un token JWT valido per i test e2e (può essere impostato via variabile d'ambiente)

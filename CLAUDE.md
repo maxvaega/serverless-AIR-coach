@@ -10,10 +10,20 @@
 - **Deployment**: Vercel Serverless
 
 ## Commands (ESSENTIAL ONLY)
-- `source /Users/massimoolivieri/Developer/serverless-AIR-coach/.venv/bin/activate`: to activate the python virtual env with all dependencies
-- `python run.py`: Start development server
-- `pytest -v -rs tests/`: Run all tests
-- `pytest -v -rs tests/test_stream_query.py`: E2E streaming tests
+- `source /Users/massimoolivieri/Developer/serverless-AIR-coach/.venv/bin/activate`: Activate python virtual env with all dependencies
+- `python run.py`: Start development server (only needed for E2E tests)
+
+### Testing Commands (Three-Tier Strategy)
+- `pytest -m unit -v`: Run unit tests (fast, mocked, < 10 seconds) - **DEFAULT**
+- `pytest -m integration -v`: Run integration tests (TestClient, no server needed, 30-60 seconds)
+- `pytest -v`: Run unit + integration tests (default, skips E2E)
+- `pytest -m e2e -v`: Run E2E tests (requires manual server: python run.py)
+- `pytest --cov=src -v`: Run tests with coverage report
+
+### Common Testing Workflows
+- **Development**: `pytest -m unit -v` (fast feedback loop)
+- **Pre-commit**: `pytest -v` (unit + integration, no manual server)
+- **Pre-deployment**: `pytest -m e2e -v` (full validation, requires server)
 
 ## Code Style (CRITICAL RULES)
 - **NEVER work on main branch**: Always create a new branch
@@ -44,9 +54,13 @@
 ## IMPORTANT Notes
 - **Serverless constraints**: Agent instances per-request, checkpointer singleton
 - **Memory isolation**: Thread ID versioning prevents cross-contamination
-- **Testing order**: Unit tests first, then E2E with running server
+- **Testing strategy**: Three-tier approach (unit → integration → e2e)
+  - Unit tests: Fast, mocked dependencies, run on every change
+  - Integration tests: TestClient-based, NO manual server needed (NEW)
+  - E2E tests: Manual server required, pre-deployment only
 - **LangGraph tools**: Use MCP servers (Langchain, context7) for library documentation
 - **Authentication**: Auth0 JWT required for `/api/stream_query` endpoint
 - **Tool output**: `domanda_teoria` returns JSON (not string) for quiz questions
 - **Event loop**: Factory pattern prevents "Event loop is closed" in serverless
 - **Documentation location**: Technical docs in `/docs/`
+- **Test markers**: Use @pytest.mark.unit, @pytest.mark.integration, or @pytest.mark.e2e
