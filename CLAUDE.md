@@ -30,6 +30,7 @@
 - **Always run tests**: Execute pytest after any code changes
 - **Update documentation**: Modify docs when changing code behavior
 - **LangGraph patterns**: Use factory pattern for agents, singleton for checkpointer
+- **get documentation when using third party libraries**: use context7 or web search whenever working with third party libraries
 
 ## Architecture Patterns
 - **Entry point**: `run.py` (Vercel) + `src/main.py` (FastAPI app)
@@ -46,9 +47,6 @@
 - **CI/CD**: 3 GitHub workflows - automated testing (test.yml), Claude integration (@claude mentions), PR reviews (claude-code-review.yml)
 
 ## Documentation
-- **IMPORTANT:** check documentation when you need it, skip the files that are not necessary
-- **[Functional Analysis](docs/FUNCTIONAL.md)**: Business and product perspective - features, use cases, and end-user flows
-- **[Technical Analysis](docs/TECNICAL.md)**: Engineering perspective - architecture, patterns, and implementation details
 - **[Testing Documentation](tests/README.md)**: Complete testing strategy, setup and usage with pytest
 
 ## IMPORTANT Notes
@@ -58,9 +56,8 @@
   - Unit tests: Fast, mocked dependencies, run on every change
   - Integration tests: TestClient-based, NO manual server needed (NEW)
   - E2E tests: Manual server required, pre-deployment only
-- **LangGraph tools**: Use MCP servers (Langchain, context7) for library documentation
+- **LangGraph tools**: Use MCP servers (Langchain, context7) or web serach for library documentation
 - **Authentication**: Auth0 JWT required for `/api/stream_query` endpoint
 - **Tool output**: `domanda_teoria` returns JSON (not string) for quiz questions
 - **Event loop**: Factory pattern prevents "Event loop is closed" in serverless
-- **Documentation location**: Technical docs in `/docs/`
 - **Test markers**: Use @pytest.mark.unit, @pytest.mark.integration, or @pytest.mark.e2e
