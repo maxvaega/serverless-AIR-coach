@@ -9,6 +9,9 @@ from unittest.mock import MagicMock, patch
 import os
 import sys
 
+# Mark all tests in this file as unit tests (fast, mocked)
+pytestmark = pytest.mark.unit
+
 # Aggiungi il percorso src al path per import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 

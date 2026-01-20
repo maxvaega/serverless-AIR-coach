@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal, List, Dict, Any, Optional
 
 # Define request/response models
@@ -14,13 +14,14 @@ class MessageRequest(BaseModel):
     message: str = Field(..., description="User query text")
     userid: str = Field(..., min_length=1, description="User identifier")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "message": "Ciao cosa sai dirmi?",
                 "userid": "userid_string"
             }
         }
+    )
 
 class MessageResponse(BaseModel):
     query: str
@@ -39,14 +40,17 @@ class SSEAgentMessage(BaseModel):
     """
     type: Literal["agent_message"] = "agent_message"
     data: str = Field(..., description="Text chunk from AI response")
+    message_id: str = Field(..., description="Unique message identifier for correlation")  # NEW - REQUIRED
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "type": "agent_message",
-                "data": "Ciao! Sono AIR Coach, sono qui per aiutarti con le tue domande sul paracadutismo..."
+                "data": "Ciao! Sono AIR Coach, sono qui per aiutarti con le tue domande sul paracadutismo...",
+                "message_id": "google-oauth2|104612087445133776110_2026-01-19T14:26:03.779"  # NEW
             }
         }
+    )
 
 
 class QuizOption(BaseModel):
@@ -68,8 +72,8 @@ class QuizQuestion(BaseModel):
     opzioni: List[QuizOption] = Field(..., description="Answer options (typically 3-4 options)")
     risposta_corretta: str = Field(..., description="Correct answer letter (A, B, C, or D)")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "capitolo": 3,
                 "capitolo_nome": "Tecnologia degli equipaggiamenti e strumenti in uso",
@@ -83,6 +87,7 @@ class QuizQuestion(BaseModel):
                 "risposta_corretta": "B"
             }
         }
+    )
 
 
 class SSEToolResult(BaseModel):
@@ -96,9 +101,10 @@ class SSEToolResult(BaseModel):
     tool_name: str = Field(..., description="Name of the executed tool")
     data: Dict[str, Any] = Field(..., description="Tool output (structure depends on tool type)")
     final: bool = Field(True, description="Indicates completion of tool execution")
+    message_id: str = Field(..., description="Unique message identifier for correlation")  # NEW - REQUIRED
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "type": "tool_result",
                 "tool_name": "domanda_teoria",
@@ -114,7 +120,9 @@ class SSEToolResult(BaseModel):
                     ],
                     "risposta_corretta": "A"
                 },
-                "final": True
+                "final": True,
+                "message_id": "google-oauth2|104612087445133776110_2026-01-19T14:26:03.779"  # NEW
             }
         }
+    )
 

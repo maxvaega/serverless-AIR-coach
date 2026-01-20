@@ -30,7 +30,6 @@ class Settings(BaseSettings):
     CACHE_TTL: int = 300
     
     # Auth0 Configuration
-    AUTH0_DOMAIN: str = os.getenv("AUTH0_DOMAIN", '')
     AUTH0_SECRET: Optional[str] = os.getenv("AUTH0_SECRET")
     auth0_domain: str = os.getenv("AUTH0_DOMAIN", "your-auth0-domain")
     auth0_api_audience: str = os.getenv("AUTH0_API_AUDIENCE", "your-auth0-api-audience")
@@ -62,7 +61,7 @@ AWS_ACCESS_KEY_ID = settings.AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY = settings.AWS_SECRET_ACCESS_KEY
 BUCKET_NAME = settings.BUCKET_NAME
 CACHE_TTL = settings.CACHE_TTL
-AUTH0_DOMAIN = settings.AUTH0_DOMAIN
+AUTH0_DOMAIN = settings.auth0_domain  # Backward compatibility - maps to auth0_domain
 AUTH0_SECRET = settings.AUTH0_SECRET
 is_production = settings.is_production
 auth0_domain = settings.auth0_domain

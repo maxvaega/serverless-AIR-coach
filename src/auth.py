@@ -4,7 +4,7 @@ import jwt
 from fastapi import Depends, HTTPException, status 
 from fastapi.security import SecurityScopes, HTTPAuthorizationCredentials, HTTPBearer 
 
-from .env import *
+from .env import get_settings
 
 class UnauthorizedException(HTTPException):
     def __init__(self, detail: str, **kwargs):

@@ -1,5 +1,9 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from pymongo.collection import Collection
+from pymongo.results import InsertOneResult, InsertManyResult
+from bson import ObjectId
+from typing import Dict, List, Any, Union, Optional
 from .env import URI
 import logging
 logger = logging.getLogger("uvicorn")
@@ -14,10 +18,10 @@ try:
 except Exception as e:
     print(f"An error occurred while connecting to MongoDB: {e}")
     
-def get_collection(database_name, collection_name):
+def get_collection(database_name: str, collection_name: str) -> Collection:
         """
         Get a collection from the MongoDB database.
-        
+
         :param database_name: Name of the database
         :param collection_name: Name of the collection
         :return: Collection object
@@ -26,10 +30,10 @@ def get_collection(database_name, collection_name):
         collection = db[collection_name]
         return collection
 
-def insert_data(database_name, collection_name, data):
+def insert_data(database_name: str, collection_name: str, data: Union[Dict[str, Any], List[Dict[str, Any]]]) -> Union[ObjectId, List[ObjectId]]:
     """
     Insert data into a MongoDB collection.
-    
+
     :param database_name: Name of the database
     :param collection_name: Name of the collection
     :param data: Data to be inserted (dictionary or list of dictionaries)
@@ -42,10 +46,10 @@ def insert_data(database_name, collection_name, data):
         result = collection.insert_one(data)
     return result.inserted_ids if isinstance(data, list) else result.inserted_id
 
-def create_collection(database_name, collection_name):
+def create_collection(database_name: str, collection_name: str) -> Collection:
     """
     Create a new collection in the MongoDB database.
-    
+
     :param database_name: Name of the database
     :param collection_name: Name of the collection
     :return: Collection object
@@ -54,10 +58,10 @@ def create_collection(database_name, collection_name):
     collection = db.create_collection(collection_name)
     return collection
 
-def drop_collection(database_name, collection_name):
+def drop_collection(database_name: str, collection_name: str) -> bool:
     """
     Drop a collection from the MongoDB database.
-    
+
     :param database_name: Name of the database
     :param collection_name: Name of the collection
     :return: True if successful, False otherwise
@@ -70,10 +74,10 @@ def drop_collection(database_name, collection_name):
         print(f"An error occurred while dropping the collection: {e}")
         return False
     
-def get_data(database_name, collection_name, filters=None, keys=None, limit=None):
+def get_data(database_name: str, collection_name: str, filters: Optional[Dict[str, Any]] = None, keys: Optional[Dict[str, Any]] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """
     Get data from a MongoDB collection based on multiple key-value pairs and specify which keys to include in the result.
-    
+
     :param database_name: Name of the database
     :param collection_name: Name of the collection
     :param filters: Dictionary of key-value pairs to filter the data (optional)
@@ -106,7 +110,7 @@ def get_data(database_name, collection_name, filters=None, keys=None, limit=None
     return documents
 
 # Funzione attualmente non utilizzata, serve per garantire che l'indice venga creato sul db (ma non serve ripeterlo ogni volta)
-def ensure_indexes(database_name, collection_name): 
+def ensure_indexes(database_name: str, collection_name: str) -> None: 
     """
     La funzione ensure_indexes serve a garantire che un indice specifico 
     (in questo caso sull'attributo timestamp in ordine decrescente) esista su una collezione MongoDB. 

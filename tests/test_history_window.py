@@ -1,6 +1,10 @@
+import pytest
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from src.utils_history import last_n_turns
+
+# Mark all tests in this file as unit tests (fast, mocked)
+pytestmark = pytest.mark.unit
 
 
 def test_last_n_turns_basic():

@@ -7,9 +7,6 @@ from src.models import MessageRequest
 from src.rag import ask
 from src.update_docs import update_docs
 from src.s3_utils import create_prompt_file
-from src.env import is_production
-import json
-import uvicorn
 from src.auth import VerifyToken
 
 auth = VerifyToken()
@@ -94,9 +91,9 @@ async def stream_endpoint(
     Incremental text chunks from the AI response. Clients should concatenate these to build the complete message.
 
     ```json
-    data: {"type": "agent_message", "data": "Ecco"}
-    data: {"type": "agent_message", "data": " una"}
-    data: {"type": "agent_message", "data": " domanda..."}
+    data: {"type": "agent_message", "data": "Ecco", "message_id": "userid_2026-01-19T14:26:03.779"}
+    data: {"type": "agent_message", "data": " una", "message_id": "userid_2026-01-19T14:26:03.779"}
+    data: {"type": "agent_message", "data": " domanda...", "message_id": "userid_2026-01-19T14:26:03.779"}
     ```
 
     ### Event Type 2: `tool_result`
@@ -119,7 +116,8 @@ async def stream_endpoint(
         ],
         "risposta_corretta": "A"
       },
-      "final": true
+      "final": true,
+      "message_id": "userid_2026-01-19T14:26:03.779"
     }
     ```
 
@@ -133,7 +131,7 @@ async def stream_endpoint(
     try:
         token = auth_result.get('access_token') or auth_result.get('token')
         logger.info(f"Request received: \ntoken_len= {len(token)}\nmessage= {request.message}\nuserid= {request.userid}")
-        stream_response = ask(request.message, request.userid, chat_history=True, user_data=True)
+        stream_response = ask(request.message, request.userid, chat_history=True, user_data=True, token=token)
         logger.info("Starting streaming response...")
         return StreamingResponse(stream_response, media_type="text/event-stream")
     except Exception as e:
