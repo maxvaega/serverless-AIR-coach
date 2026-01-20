@@ -76,8 +76,9 @@ class StreamingHandler:
         tool_name = event.get("name")
         tool_input = event.get("data", {}).get("input", {})
         logger.info(f"TOOL - {tool_name} started with input: {tool_input}")
-        return
-        yield  # Makes this an async generator
+        # Empty generator - no output yielded for tool start events
+        if False:
+            yield
     
     async def _handle_tool_end(self, event: Dict) -> AsyncGenerator[str, None]:
         """Gestisce l'evento di fine esecuzione tool."""
