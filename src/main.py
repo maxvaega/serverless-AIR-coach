@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, APIRouter, Security, Request, Query
+from fastapi import FastAPI, HTTPException, APIRouter, Security, Request, Query, Depends
+from fastapi.security import APIKeyHeader
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -11,6 +12,7 @@ from src.auth import VerifyToken
 from src.env import MONITORING_API_KEY
 
 auth = VerifyToken()
+monitoring_api_key_header = APIKeyHeader(name="X-Monitoring-Key", auto_error=False)
 
 app = FastAPI(
     title='AIR Coach API',
@@ -171,8 +173,8 @@ async def update_docs_endpoint():
 
 @api_router.get("/monitoring")
 async def monitoring_endpoint(
-    request: Request,
     hours: int = Query(default=24, ge=1, le=720),
+    api_key: str = Security(monitoring_api_key_header),
 ):
     """
     Monitoring dashboard endpoint.
@@ -190,8 +192,7 @@ async def monitoring_endpoint(
     if not MONITORING_API_KEY:
         raise HTTPException(status_code=403, detail="Monitoring endpoint not configured")
 
-    api_key = request.headers.get("X-Monitoring-Key", "")
-    if api_key != MONITORING_API_KEY:
+    if not api_key or api_key != MONITORING_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid monitoring API key")
 
     try:
