@@ -38,6 +38,10 @@ def load_local_docs(directory: str) -> dict[str, str]:
         print(f"Error: directory '{directory}' does not exist")
         sys.exit(1)
 
+    docs_subdir = dir_path / "docs"
+    if docs_subdir.is_dir():
+        dir_path = docs_subdir
+
     for md_file in sorted(dir_path.glob("*.md")):
         content = md_file.read_text(encoding="utf-8")
         docs[md_file.name] = content
@@ -57,7 +61,7 @@ def load_s3_docs() -> dict[str, str]:
     )
 
     docs = {}
-    response = s3.list_objects_v2(Bucket=BUCKET_NAME)
+    response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix="docs/")
     for obj in response.get("Contents", []):
         key = obj["Key"]
         if key.endswith(".md"):
@@ -135,7 +139,7 @@ def main():
     import google.generativeai as genai
     genai.configure(api_key=api_key)
 
-    model_name = args.model or os.getenv("FORCED_MODEL", "models/gemini-2.0-flash")
+    model_name = args.model or os.getenv("FORCED_MODEL", "gemini-3-flash-preview")
     # Strip "models/" prefix for GenerativeModel if present
     if model_name.startswith("models/"):
         model_name = model_name[len("models/"):]

@@ -1,30 +1,70 @@
-# Token Counter - Manuale d'uso
+# Monitoring Fase 0 - Manuale d'uso
 
-Script per il conteggio reale dei token nella knowledge base di AIR Coach. Utilizza il SDK di Google Generative AI per contare i token esattamente come li conteggia il modello, e produce stime di costo basate sul pricing di Gemini Flash.
+Sistema di monitoraggio per AIR Coach che misura token reali, stato del caching, costi e rate limit. Comprende script standalone, moduli runtime integrati nel server e un endpoint API.
 
 ## Indice
 
+- [Panoramica](#panoramica)
 - [Prerequisiti](#prerequisiti)
-- [Uso rapido](#uso-rapido)
-- [Opzioni](#opzioni)
-- [Modalita di caricamento documenti](#modalita-di-caricamento-documenti)
-- [Cache Probe](#cache-probe)
-- [Output](#output)
+- [Variabili d'ambiente](#variabili-dambiente)
+- [Script: count_tokens.py](#script-count_tokenspy)
+- [Script: calculate_costs.py](#script-calculate_costspy)
+- [Script: monitoring_report.py](#script-monitoring_reportpy)
+- [Endpoint API: GET /api/monitoring](#endpoint-api-get-apimonitoring)
+- [Moduli runtime](#moduli-runtime)
+- [Collezioni MongoDB](#collezioni-mongodb)
 - [Interpretazione dei risultati](#interpretazione-dei-risultati)
-- [Esempi completi](#esempi-completi)
 - [Risoluzione problemi](#risoluzione-problemi)
 
 ---
+
+## Panoramica
+
+Il sistema e composto da tre livelli:
+
+| Livello | Componente | Scopo |
+|---------|-----------|-------|
+| **Script standalone** | `scripts/count_tokens.py` | Conteggio token della knowledge base (eseguibile offline) |
+| **Script standalone** | `scripts/calculate_costs.py` | Calcolo costi reali dai dati raccolti in MongoDB |
+| **Script standalone** | `scripts/monitoring_report.py` | Report completo con raccomandazioni |
+| **Moduli runtime** | `src/monitoring/token_logger.py` | Logging automatico token per ogni richiesta |
+| **Moduli runtime** | `src/monitoring/rate_limit_monitor.py` | Cattura errori 429 (rate limit) |
+| **Moduli runtime** | `src/monitoring/cache_monitor.py` | Analisi metriche di cache dalle risposte LLM |
+| **Moduli runtime** | `src/monitoring/dashboard.py` | Aggregazione metriche e raccomandazioni |
+| **Endpoint API** | `GET /api/monitoring` | Report via HTTP (protetto da API key) |
+
+### Flusso dati
+
+1. Per ogni richiesta utente, `src/rag.py` misura la durata e cattura `usage_metadata` dal chunk finale tramite `StreamingHandler`
+2. Nel blocco `finally`, chiama `log_token_usage()` per persistere i dati in MongoDB (`token_metrics`)
+3. Se viene rilevato un errore 429, chiama `log_rate_limit_event()` per persistere l'evento in MongoDB (`rate_limit_events`)
+4. Gli script e l'endpoint API interrogano queste collezioni per generare report
 
 ## Prerequisiti
 
 1. **Python 3.7+** con il virtual environment del progetto attivato
 2. **`GOOGLE_API_KEY`** configurata nel file `.env` (o come variabile d'ambiente)
-3. Per la modalita S3: le variabili AWS (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `BUCKET_NAME`) devono essere configurate
+3. **MongoDB Atlas** raggiungibile (per i moduli runtime e gli script di analisi)
+4. Per la modalita S3 di `count_tokens.py`: le variabili AWS (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `BUCKET_NAME`) devono essere configurate
 
-Lo script non richiede dipendenze aggiuntive rispetto a quelle gia installate nel progetto.
+Non sono necessarie dipendenze aggiuntive rispetto a quelle gia installate nel progetto.
 
-## Uso rapido
+## Variabili d'ambiente
+
+| Variabile | Default | Descrizione |
+|-----------|---------|-------------|
+| `ENABLE_TOKEN_LOGGING` | `"true"` | Abilita/disabilita il logging dei token su MongoDB. Impostare a `"false"` per disabilitare |
+| `MONITORING_API_KEY` | `""` | API key richiesta per accedere all'endpoint `GET /api/monitoring`. Passata nell'header `X-Monitoring-Key` |
+
+Entrambe sono definite in `src/env.py` e leggono dal file `.env`.
+
+---
+
+## Script: count_tokens.py
+
+Conteggio reale dei token nella knowledge base usando il SDK di Google Generative AI. Produce stime di costo basate sul pricing di Gemini Flash.
+
+### Uso
 
 ```bash
 # Dalla root del progetto (serverless-AIR-coach/)
@@ -34,51 +74,31 @@ python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/
 
 # Conteggio da S3 (richiede credenziali AWS)
 python scripts/count_tokens.py
+
+# Con verifica cache implicito
+python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/ --probe-cache
+
+# Con modello specifico
+python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/ --model gemini-2.0-flash
 ```
 
-## Opzioni
+### Opzioni
 
 | Opzione | Tipo | Default | Descrizione |
 |---------|------|---------|-------------|
 | `--local <path>` | string | _(S3)_ | Percorso alla directory locale contenente i file `.md` |
 | `--probe-cache` | flag | `false` | Esegue un probe per verificare se il caching implicito e attivo |
-| `--model <name>` | string | da `FORCED_MODEL` o `gemini-2.0-flash` | Modello da usare per il conteggio token |
+| `--model <name>` | string | da `FORCED_MODEL` o `gemini-3-flash-preview` | Modello da usare per il conteggio token |
 
-## Modalita di caricamento documenti
+### Modalita di caricamento documenti
 
-### Modalita locale (`--local`)
+**Modalita locale (`--local`)**: carica tutti i file `.md` da una directory locale. Lo script cerca i file `*.md`, li ordina alfabeticamente, ed esce con errore se la directory non esiste o non contiene file `.md`. Se la directory contiene una sottodirectory `docs/`, usa quella.
 
-Carica tutti i file `.md` da una directory locale. Ideale per lo sviluppo e per conteggi rapidi senza accesso a S3.
+**Modalita S3 (default)**: carica i file `.md` dal bucket S3 configurato nel `.env`. Riflette esattamente i documenti usati in produzione. Richiede `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `BUCKET_NAME`.
 
-```bash
-python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/
-```
+### Cache Probe
 
-Lo script:
-- Cerca tutti i file `*.md` nella directory specificata
-- Li ordina alfabeticamente
-- Esce con errore se la directory non esiste o non contiene file `.md`
-
-### Modalita S3 (default)
-
-Carica i file `.md` dal bucket S3 configurato nel `.env`. Questo riflette esattamente i documenti che il sistema carica in produzione.
-
-```bash
-python scripts/count_tokens.py
-```
-
-Richiede che le seguenti variabili siano configurate:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `BUCKET_NAME`
-
-## Cache Probe
-
-L'opzione `--probe-cache` invia una richiesta minimale al modello con l'intero contesto concatenato e verifica il campo `cached_content_token_count` nella risposta. Questo permette di capire se il caching implicito di Google e attivo.
-
-```bash
-python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/ --probe-cache
-```
+L'opzione `--probe-cache` invia una richiesta minimale al modello con l'intero contesto concatenato e verifica il campo `cached_content_token_count` nella risposta.
 
 Il probe:
 1. Concatena tutti i documenti
@@ -88,11 +108,9 @@ Il probe:
 
 **Nota**: il caching implicito di Google si attiva tipicamente dopo che lo stesso contesto e stato inviato piu volte. Una singola esecuzione potrebbe non mostrare cache hits.
 
-## Output
+### Output
 
-### Tabella documenti
-
-Lo script produce una tabella con il dettaglio per ogni documento:
+**Tabella documenti:**
 
 ```
 Document                                              Bytes     Tokens       %
@@ -105,16 +123,7 @@ Document                                              Bytes     Tokens       %
 TOTAL                                               198,432     50,000  100.0%
 ```
 
-| Colonna | Descrizione |
-|---------|-------------|
-| **Document** | Nome del file |
-| **Bytes** | Dimensione in byte (UTF-8) |
-| **Tokens** | Conteggio reale dei token (da Google SDK) |
-| **%** | Percentuale sul totale dei token |
-
-### Stime di costo
-
-Dopo la tabella, lo script mostra le stime di costo basate sul pricing di Gemini Flash:
+**Stime di costo** (per 50, 100 e 500 richieste/giorno):
 
 ```
 --- Cost Estimates (Gemini Flash) ---
@@ -129,15 +138,9 @@ Dopo la tabella, lo script mostra le stime di costo basate sul pricing di Gemini
     Monthly savings:    $    5.63
 ```
 
-I prezzi utilizzati sono:
-- **Input (no cache)**: $0.10 / 1M token
-- **Input (cached)**: $0.025 / 1M token (75% di risparmio)
+Prezzi: input $0.10/1M token, input cached $0.025/1M token (75% di risparmio).
 
-Le proiezioni mensili sono calcolate per 50, 100 e 500 richieste al giorno.
-
-### Cache Probe (opzionale)
-
-Se attivato con `--probe-cache`:
+**Cache Probe** (se attivato):
 
 ```
 --- Cache Probe ---
@@ -147,6 +150,306 @@ Se attivato con `--probe-cache`:
   Cache ratio:          81.1%
   -> Implicit caching is ACTIVE
 ```
+
+---
+
+## Script: calculate_costs.py
+
+Interroga la collezione `token_metrics` in MongoDB e calcola costi reali, risparmi dal caching e proiezioni mensili basate sui dati di traffico effettivo.
+
+### Uso
+
+```bash
+# Costi delle ultime 24 ore (default)
+python scripts/calculate_costs.py
+
+# Costi degli ultimi 7 giorni
+python scripts/calculate_costs.py --hours 168
+
+# Costi filtrati per utente
+python scripts/calculate_costs.py --user google-oauth2|12345
+
+# Combinazione
+python scripts/calculate_costs.py --hours 72 --user google-oauth2|12345
+```
+
+### Opzioni
+
+| Opzione | Tipo | Default | Descrizione |
+|---------|------|---------|-------------|
+| `--hours <n>` | int | `24` | Ore da analizzare (look-back) |
+| `--user <id>` | string | _(tutti)_ | Filtra per user ID |
+
+### Output
+
+```
+============================================================
+  AIR Coach Cost Report — Last 24 hours
+============================================================
+
+--- Token Usage ---
+  Total requests:              150
+  Total input tokens:    27,750,000
+  Total output tokens:      300,000
+  Total cached tokens:   22,200,000
+  Avg input/request:        185,000
+  Avg output/request:         2,000
+
+--- Latency ---
+  Avg duration:             3,200 ms
+  Min duration:             1,800 ms
+  Max duration:             8,500 ms
+
+--- Cache Analysis ---
+  Cache hit requests:           142 (94.7%)
+  Cache token ratio:           80.0%
+  Caching active:               YES
+
+--- Costs (Gemini Flash) ---
+  Period cost:          $   0.2350
+  Cost without cache:   $   0.3975
+  Cache savings:        $   0.1625
+
+--- Monthly Projection ---
+  Projected (actual):   $   7.05
+  Projected (no cache): $  11.93
+  Projected savings:    $   4.88
+
+--- Users ---
+  Unique users:                  12
+    google-oauth2|12345: 45 requests
+    google-oauth2|67890: 30 requests
+    ...
+```
+
+Il pricing usato: input $0.10/1M, output $0.40/1M, input cached $0.025/1M.
+
+---
+
+## Script: monitoring_report.py
+
+Genera un report completo che aggrega tutte le metriche (token, cache, costi, rate limit) con raccomandazioni automatiche.
+
+### Uso
+
+```bash
+# Report delle ultime 24 ore (default)
+python scripts/monitoring_report.py
+
+# Report degli ultimi 7 giorni
+python scripts/monitoring_report.py --hours 168
+
+# Output in formato JSON (per integrazione con altri tool)
+python scripts/monitoring_report.py --json
+```
+
+### Opzioni
+
+| Opzione | Tipo | Default | Descrizione |
+|---------|------|---------|-------------|
+| `--hours <n>` | int | `24` | Ore da analizzare |
+| `--json` | flag | `false` | Output in formato JSON invece del formato leggibile |
+
+### Output
+
+```
+============================================================
+  AIR Coach Monitoring Report
+  Period: last 24 hours
+  Generated: 2025-01-15T10:30:00+00:00
+============================================================
+
+--- Token Usage ---
+  Total requests:              150
+  Total input tokens:    27,750,000
+  Total output tokens:      300,000
+  Avg input/request:        185,000
+  Avg output/request:         2,000
+  Avg duration:           3,200.0 ms
+
+--- Cache Analysis ---
+  Caching active:               YES
+  Cache hit requests:           142
+  Cache hit rate:              94.7%
+  Avg cache ratio:             80.0%
+  Total cached tokens:   22,200,000
+
+--- Cost Analysis ---
+  Period cost:          $   0.2350
+  Cost without cache:   $   0.3975
+  Cache savings:        $   0.1625
+  Monthly projection:   $   7.05
+
+--- Rate Limits ---
+  Total events:                  0
+
+--- Recommendations ---
+  1. No issues detected. System is operating normally.
+```
+
+### Raccomandazioni automatiche
+
+Il report genera raccomandazioni basate sui dati:
+
+| Condizione | Raccomandazione |
+|------------|-----------------|
+| Caching non attivo | Suggerisce di abilitare il caching esplicito |
+| Cache ratio < 30% | Suggerisce caching per il system prompt statico |
+| Costo mensile proiettato > $500 | Suggerisce migrazione a Vertex AI |
+| Rate limit events rilevati | Suggerisce throttling delle richieste |
+| Media input > 200K token | Suggerisce riduzione del contesto o caricamento selettivo |
+
+---
+
+## Endpoint API: GET /api/monitoring
+
+Endpoint HTTP che restituisce lo stesso report di `monitoring_report.py` in formato JSON. Protetto da API key.
+
+### Richiesta
+
+```
+GET /api/monitoring?hours=24
+Header: X-Monitoring-Key: <MONITORING_API_KEY>
+```
+
+### Parametri
+
+| Parametro | Tipo | Default | Vincoli | Descrizione |
+|-----------|------|---------|---------|-------------|
+| `hours` | int | `24` | 1-720 | Ore da analizzare |
+
+### Autenticazione
+
+L'endpoint richiede l'header `X-Monitoring-Key` con il valore della variabile `MONITORING_API_KEY`. Senza API key configurata (valore vuoto), l'endpoint e disabilitato e restituisce 403.
+
+### Risposta
+
+```json
+{
+  "period_hours": 24,
+  "generated_at": "2025-01-15T10:30:00+00:00",
+  "token_usage": {
+    "total_requests": 150,
+    "total_input_tokens": 27750000,
+    "total_output_tokens": 300000,
+    "total_tokens": 28050000,
+    "avg_input_tokens": 185000,
+    "avg_output_tokens": 2000,
+    "avg_duration_ms": 3200.0
+  },
+  "cache_analysis": {
+    "total_cached_tokens": 22200000,
+    "cache_hit_requests": 142,
+    "cache_hit_rate_percent": 94.7,
+    "avg_cache_ratio_percent": 80.0,
+    "caching_active": true
+  },
+  "cost_analysis": {
+    "period_cost_usd": 0.235,
+    "cost_without_cache_usd": 0.3975,
+    "cache_savings_usd": 0.1625,
+    "projected_monthly_usd": 7.05
+  },
+  "rate_limits": {
+    "total_events": 0,
+    "by_type": {},
+    "affected_users": []
+  },
+  "recommendations": [
+    "No issues detected. System is operating normally."
+  ]
+}
+```
+
+### Esempio con curl
+
+```bash
+curl -H "X-Monitoring-Key: la-tua-api-key" "https://your-domain/api/monitoring?hours=48"
+```
+
+---
+
+## Moduli runtime
+
+I moduli in `src/monitoring/` si integrano automaticamente nel flusso delle richieste. Non richiedono intervento manuale.
+
+### token_logger.py
+
+Cattura `usage_metadata` da ogni risposta LLM e la persiste nella collezione `token_metrics` di MongoDB.
+
+**Integrazione**: `src/rag.py` chiama `log_token_usage()` nel blocco `finally` di ogni richiesta, passando i dati catturati da `StreamingHandler.get_usage_metadata()`.
+
+**Campi catturati**:
+- `input_tokens` / `prompt_token_count`
+- `output_tokens` / `candidates_token_count`
+- `total_tokens` / `total_token_count`
+- `cached_tokens` / `cached_content_token_count`
+- `request_duration_ms` (misurato con `RequestTimer`)
+
+**Disabilitazione**: impostare `ENABLE_TOKEN_LOGGING=false` nel `.env`.
+
+### rate_limit_monitor.py
+
+Cattura errori HTTP 429 (rate limit) e li persiste nella collezione `rate_limit_events` di MongoDB.
+
+**Integrazione**: `src/agent/streaming_handler.py` rileva gli errori 429 nel blocco `except` tramite `is_rate_limited()`. Se rilevato, `src/rag.py` chiama `log_rate_limit_event()` nel blocco `finally`.
+
+**Tipo di limite rilevato automaticamente** dal messaggio di errore:
+- `RPM` — requests per minute
+- `TPM` — tokens per minute
+- `RPD` — requests per day
+- `QUOTA` — quota generica
+
+### cache_monitor.py
+
+Analizza le metriche di caching dalle risposte LLM (sia formato Google SDK che LangChain). Usato per logging strutturato nei log del server.
+
+**Funzioni**:
+- `log_cache_metrics(response)` — estrae e logga cache ratio da una singola risposta
+- `log_request_context(user_id, model, region)` — logga il contesto della richiesta
+- `analyze_cache_effectiveness(metrics_history)` — analisi aggregata su uno storico di metriche
+
+### dashboard.py
+
+Aggrega dati da `token_logger` e `rate_limit_monitor` in un report strutturato con raccomandazioni automatiche. Usato sia dall'endpoint API che dallo script `monitoring_report.py`.
+
+---
+
+## Collezioni MongoDB
+
+### `token_metrics`
+
+Un documento per ogni richiesta al LLM:
+
+```json
+{
+  "user_id": "google-oauth2|12345",
+  "model": "gemini-3-flash-preview",
+  "input_tokens": 185000,
+  "output_tokens": 2500,
+  "total_tokens": 187500,
+  "cached_tokens": 148000,
+  "request_duration_ms": 3200,
+  "timestamp": "2025-01-15T10:30:00Z",
+  "metadata": {}
+}
+```
+
+### `rate_limit_events`
+
+Un documento per ogni errore 429 ricevuto:
+
+```json
+{
+  "user_id": "google-oauth2|12345",
+  "limit_type": "RPM",
+  "model": "gemini-3-flash-preview",
+  "error_message": "Resource exhausted: requests per minute limit...",
+  "timestamp": "2025-01-15T10:30:00Z"
+}
+```
+
+---
 
 ## Interpretazione dei risultati
 
@@ -160,7 +463,7 @@ Il numero totale di token nel contesto statico e il dato piu importante. Questo 
 
 ### Distribuzione per documento
 
-La colonna `%` aiuta a identificare quali documenti occupano piu spazio nel contesto. Se un documento occupa oltre il 20% del totale, potrebbe essere candidato per:
+La colonna `%` di `count_tokens.py` aiuta a identificare quali documenti occupano piu spazio nel contesto. Se un documento occupa oltre il 20% del totale, potrebbe essere candidato per:
 - Riassunto o semplificazione
 - Caricamento condizionale (solo quando rilevante)
 - Spostamento nel retrieval dinamico (RAG)
@@ -173,39 +476,9 @@ La colonna `%` aiuta a identificare quali documenti occupano piu spazio nel cont
 
 ### Proiezioni di costo
 
-Le proiezioni assumono che ogni richiesta invii l'intero contesto statico. I costi reali includeranno anche i token di output (risposta del modello) e i token della conversazione, che non sono calcolati qui.
+Le proiezioni di `count_tokens.py` assumono solo il contesto statico. I costi reali calcolati da `calculate_costs.py` e `monitoring_report.py` includono anche i token di output e la conversazione.
 
-## Esempi completi
-
-### Conteggio base con documenti locali
-
-```bash
-python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/
-```
-
-### Conteggio con modello specifico
-
-```bash
-python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/ --model gemini-2.0-flash
-```
-
-### Verifica completa con cache probe
-
-```bash
-python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/ --probe-cache
-```
-
-### Conteggio da S3 (produzione)
-
-```bash
-python scripts/count_tokens.py
-```
-
-### Conteggio da S3 con cache probe
-
-```bash
-python scripts/count_tokens.py --probe-cache
-```
+---
 
 ## Risoluzione problemi
 
@@ -231,3 +504,16 @@ L'errore puo derivare da:
 ### Rate limit durante il conteggio
 
 L'API `count_tokens()` ha un limite di 3000 RPM (richieste per minuto). Con una knowledge base tipica (10-15 documenti) non si raggiunge mai questo limite. Se si verificano errori 429, ridurre il numero di documenti nella directory.
+
+### `No token metrics found for the specified period`
+
+Nessun dato nella collezione `token_metrics` per il periodo richiesto. Verificare che:
+- `ENABLE_TOKEN_LOGGING` sia `true`
+- Il server sia in esecuzione e riceva richieste
+- La connessione a MongoDB sia attiva
+
+### 403 sull'endpoint `/api/monitoring`
+
+La API key non corrisponde. Verificare che:
+- `MONITORING_API_KEY` sia configurata nel `.env` del server
+- L'header `X-Monitoring-Key` nella richiesta contenga lo stesso valore
