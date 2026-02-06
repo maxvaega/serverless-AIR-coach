@@ -10,7 +10,7 @@
 - **Deployment**: Vercel Serverless
 
 ## Commands (ESSENTIAL ONLY)
-- `source /Users/massimoolivieri/Developer/serverless-AIR-coach/.venv/bin/activate`: Activate python virtual env with all dependencies
+- IMPORTANTE: Always Activate python virtual env with all dependencies (folder .venv)
 - `python run.py`: Start development server (only needed for E2E tests)
 
 ### Testing Commands (Three-Tier Strategy)
