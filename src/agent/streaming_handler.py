@@ -60,7 +60,10 @@ class StreamingHandler:
                 elif kind == "on_chat_model_stream":
                     async for chunk in self._handle_model_stream(event):
                         yield chunk
-                    
+
+                elif kind == "on_chat_model_end":
+                    self._handle_model_end(event)
+
         except Exception as e:
             logger.error(f"Errore nello streaming con controllo tool: {e}")
             # Track rate limit errors for monitoring
@@ -75,6 +78,7 @@ class StreamingHandler:
         self.tool_records = []
         self.tool_executed = False
         self.serialized_output = None
+        self.usage_metadata = {}
     
     async def _handle_tool_start(self, event: Dict) -> AsyncGenerator[str, None]:
         """Gestisce l'evento di inizio esecuzione tool (logging only)."""
@@ -128,7 +132,13 @@ class StreamingHandler:
                     "message_id": self.message_id  # REQUIRED field
                 }
                 yield f"data: {json.dumps(ai_response)}\n\n"
-    
+
+    def _handle_model_end(self, event: Dict) -> None:
+        """Capture usage_metadata from the complete model response."""
+        output = event.get("data", {}).get("output")
+        if output and hasattr(output, "usage_metadata") and output.usage_metadata:
+            self.usage_metadata = output.usage_metadata
+
     def get_final_response(self) -> str:
         """Restituisce la risposta finale concatenata."""
         return "".join([c for c in self.response_chunks if c])
