@@ -11,8 +11,8 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger("uvicorn")
 
-# MongoDB collection name for token metrics
-TOKEN_METRICS_COLLECTION = "token_metrics"
+# MongoDB database name for token metrics
+TOKEN_METRICS_DB = "Token_metrics"
 
 
 def log_token_usage(
@@ -101,10 +101,10 @@ def log_token_usage(
 
 def _save_metric(metric: Dict[str, Any]) -> None:
     """Save a metric document to MongoDB."""
-    from ..env import DATABASE_NAME
+    from ..env import COLLECTION_NAME
     from ..database import get_collection
 
-    collection = get_collection(DATABASE_NAME, TOKEN_METRICS_COLLECTION)
+    collection = get_collection(TOKEN_METRICS_DB, COLLECTION_NAME)
     collection.insert_one(metric)
 
 
@@ -122,10 +122,10 @@ def get_token_metrics(
     Returns:
         List of metric documents
     """
-    from ..env import DATABASE_NAME
+    from ..env import COLLECTION_NAME
     from ..database import get_collection
 
-    collection = get_collection(DATABASE_NAME, TOKEN_METRICS_COLLECTION)
+    collection = get_collection(TOKEN_METRICS_DB, COLLECTION_NAME)
 
     since = datetime.now(timezone.utc).replace(
         hour=datetime.now(timezone.utc).hour - hours if hours < 24 else 0
