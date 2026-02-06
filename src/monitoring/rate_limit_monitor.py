@@ -74,10 +74,10 @@ def _detect_limit_type(error_message: str) -> str:
 
 def _save_event(event: Dict[str, Any]) -> None:
     """Save a rate limit event to MongoDB."""
-    from ..env import DATABASE_NAME
+    from .token_logger import TOKEN_METRICS_DB
     from ..database import get_collection
 
-    collection = get_collection(DATABASE_NAME, RATE_LIMIT_COLLECTION)
+    collection = get_collection(TOKEN_METRICS_DB, RATE_LIMIT_COLLECTION)
     collection.insert_one(event)
 
 
@@ -95,10 +95,10 @@ def get_rate_limit_events(
     Returns:
         List of rate limit event documents
     """
-    from ..env import DATABASE_NAME
+    from .token_logger import TOKEN_METRICS_DB
     from ..database import get_collection
 
-    collection = get_collection(DATABASE_NAME, RATE_LIMIT_COLLECTION)
+    collection = get_collection(TOKEN_METRICS_DB, RATE_LIMIT_COLLECTION)
 
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
 
