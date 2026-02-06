@@ -20,6 +20,7 @@ class StreamingHandler:
         self.tool_executed = False
         self.serialized_output = None
         self.message_id = message_id  # REQUIRED: Store for chunk injection
+        self.usage_metadata: Dict[str, Any] = {}  # Token usage from LLM response
     
     async def handle_stream_events(
         self, 
@@ -62,6 +63,10 @@ class StreamingHandler:
                     
         except Exception as e:
             logger.error(f"Errore nello streaming con controllo tool: {e}")
+            # Track rate limit errors for monitoring
+            from ..monitoring.rate_limit_monitor import is_rate_limited
+            if is_rate_limited(e):
+                self._rate_limit_error = str(e)
             yield f"data: {{'error': 'Errore nello streaming: {str(e)}'}}\n\n"
     
     def _reset_state(self):
@@ -111,6 +116,9 @@ class StreamingHandler:
         """Gestisce l'evento di streaming del modello."""
         chunk = event["data"].get("chunk")
         if isinstance(chunk, AIMessageChunk):
+            # Capture usage_metadata from the chunk (typically on the last chunk)
+            if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                self.usage_metadata = chunk.usage_metadata
             content_text = chunk.text()
             if content_text:
                 self.response_chunks.append(content_text)
@@ -136,3 +144,7 @@ class StreamingHandler:
     def get_serialized_output(self):
         """Restituisce l'ultimo output serializzato dei tool."""
         return self.serialized_output
+
+    def get_usage_metadata(self) -> Dict[str, Any]:
+        """Returns captured token usage metadata from the LLM response."""
+        return self.usage_metadata

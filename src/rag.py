@@ -16,6 +16,8 @@ from .agent.streaming_handler import StreamingHandler
 from .memory.seeding import MemorySeeder
 from .memory.persistence import ConversationPersistence
 from .monitoring.cache_monitor import log_request_context
+from .monitoring.token_logger import log_token_usage, RequestTimer
+from .monitoring.rate_limit_monitor import log_rate_limit_event
 
 import logging
 logger = logging.getLogger("uvicorn")
@@ -79,12 +81,15 @@ def _ask_streaming(agent_executor, config, query: str, user_id: str, chat_histor
         MemorySeeder.seed_agent_memory(agent_executor, config, user_id, chat_history)
         message_id = generate_message_id(user_id)  # MOVED: Generate before handler
         streaming_handler = StreamingHandler(message_id=message_id)  # MODIFIED: Pass to handler
+        timer = RequestTimer()
 
         try:
             logger.info(f"STREAM - Inizio gestione streaming per messaggio con ID= {message_id}")
+            timer.__enter__()
             async for chunk in streaming_handler.handle_stream_events(agent_executor, query, config):
                 yield chunk
         finally:
+            timer.__exit__(None, None, None)
             response = streaming_handler.get_final_response()
             tool_records = streaming_handler.get_tool_records()
             serialized_output = streaming_handler.get_serialized_output()
@@ -94,6 +99,26 @@ def _ask_streaming(agent_executor, config, query: str, user_id: str, chat_histor
 
             ConversationPersistence.log_run_completion(response, tool_records, serialized_output)
             ConversationPersistence.save_conversation(query, response, user_id, tool_records, message_id)
+
+            # Log token usage metrics
+            usage_metadata = streaming_handler.get_usage_metadata()
+            if usage_metadata:
+                log_token_usage(
+                    user_id=user_id,
+                    model=FORCED_MODEL,
+                    usage_metadata=usage_metadata,
+                    request_duration_ms=timer.duration_ms,
+                    metadata={"message_id": message_id},
+                )
+
+            # Log rate limit events if detected
+            rate_limit_error = getattr(streaming_handler, "_rate_limit_error", None)
+            if rate_limit_error:
+                log_rate_limit_event(
+                    user_id=user_id,
+                    model=FORCED_MODEL,
+                    error_message=rate_limit_error,
+                )
 
     return stream_response()
 

@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     is_production: bool = os.getenv("ENVIRONMENT", "development").lower() == "production"
     HISTORY_LIMIT: int = int(os.getenv("HISTORY_LIMIT", "10"))
 
+    # Monitoring Configuration
+    ENABLE_TOKEN_LOGGING: bool = os.getenv("ENABLE_TOKEN_LOGGING", "true").lower() == "true"
+    MONITORING_API_KEY: str = os.getenv("MONITORING_API_KEY", "")
+
     class Config:
         env_file = ".env"
         env_parse = True
@@ -76,3 +80,7 @@ VERTEX_AI_REGION = settings.VERTEX_AI_REGION
 ENABLE_GOOGLE_CACHING = settings.ENABLE_GOOGLE_CACHING
 CACHE_REGION = settings.CACHE_REGION
 CACHE_DEBUG_LOGGING = settings.CACHE_DEBUG_LOGGING
+
+# Monitoring Configuration
+ENABLE_TOKEN_LOGGING = settings.ENABLE_TOKEN_LOGGING
+MONITORING_API_KEY = settings.MONITORING_API_KEY

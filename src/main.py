@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, APIRouter, Security
+from fastapi import FastAPI, HTTPException, APIRouter, Security, Request, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -8,6 +8,7 @@ from src.rag import ask
 from src.update_docs import update_docs
 from src.s3_utils import create_prompt_file
 from src.auth import VerifyToken
+from src.env import MONITORING_API_KEY
 
 auth = VerifyToken()
 
@@ -167,6 +168,39 @@ async def update_docs_endpoint():
     except Exception as e:
         logger.error(f"Exception occurred while updating docs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@api_router.get("/monitoring")
+async def monitoring_endpoint(
+    request: Request,
+    hours: int = Query(default=24, ge=1, le=720),
+):
+    """
+    Monitoring dashboard endpoint.
+
+    Returns aggregated metrics: token usage, cache analysis, cost projections,
+    rate limit events, and recommendations.
+
+    Protected by static API key via X-Monitoring-Key header.
+    If MONITORING_API_KEY is not set, the endpoint returns 403.
+
+    Query params:
+        hours: Number of hours to look back (default: 24, max: 720)
+    """
+    # Verify API key
+    if not MONITORING_API_KEY:
+        raise HTTPException(status_code=403, detail="Monitoring endpoint not configured")
+
+    api_key = request.headers.get("X-Monitoring-Key", "")
+    if api_key != MONITORING_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid monitoring API key")
+
+    try:
+        from src.monitoring.dashboard import get_monitoring_report
+        report = get_monitoring_report(hours=hours)
+        return report
+    except Exception as e:
+        logger.error(f"Error generating monitoring report: {e}")
+        raise HTTPException(status_code=500, detail="Error generating monitoring report")
 
 app.include_router(api_router) # for /api/ prefix
 
