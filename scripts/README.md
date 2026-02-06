@@ -383,6 +383,7 @@ Cattura `usage_metadata` da ogni risposta LLM e la persiste nella collezione `to
 - `input_tokens` / `prompt_token_count`
 - `output_tokens` / `candidates_token_count`
 - `total_tokens` / `total_token_count`
+- `input_token_details.cache_read` (LangChain format, primary)
 - `cached_tokens` / `cached_content_token_count`
 - `request_duration_ms` (misurato con `RequestTimer`)
 

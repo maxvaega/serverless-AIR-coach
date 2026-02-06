@@ -94,6 +94,54 @@ class TestLogTokenUsage:
 
         assert result is None
 
+    @patch("src.monitoring.token_logger._save_metric")
+    def test_handles_langchain_input_token_details_format(self, mock_save):
+        """Should extract cached_tokens from input_token_details.cache_read (LangChain format)."""
+        from src.monitoring.token_logger import log_token_usage
+
+        usage = {
+            "input_tokens": 185000,
+            "output_tokens": 500,
+            "total_tokens": 185500,
+            "input_token_details": {"cache_read": 150000},
+        }
+
+        with patch("src.env.settings") as mock_settings:
+            mock_settings.ENABLE_TOKEN_LOGGING = True
+            result = log_token_usage(
+                user_id="test-user",
+                model="gemini-flash",
+                usage_metadata=usage,
+            )
+
+        assert result is not None
+        assert result["cached_tokens"] == 150000
+        mock_save.assert_called_once()
+
+    @patch("src.monitoring.token_logger._save_metric")
+    def test_input_token_details_takes_priority(self, mock_save):
+        """input_token_details.cache_read should take priority over top-level cached_tokens."""
+        from src.monitoring.token_logger import log_token_usage
+
+        usage = {
+            "input_tokens": 185000,
+            "output_tokens": 500,
+            "total_tokens": 185500,
+            "cached_tokens": 99999,
+            "input_token_details": {"cache_read": 150000},
+        }
+
+        with patch("src.env.settings") as mock_settings:
+            mock_settings.ENABLE_TOKEN_LOGGING = True
+            result = log_token_usage(
+                user_id="test-user",
+                model="gemini-flash",
+                usage_metadata=usage,
+            )
+
+        assert result is not None
+        assert result["cached_tokens"] == 150000
+
     @patch("src.monitoring.token_logger._save_metric", side_effect=Exception("DB error"))
     def test_handles_save_error_gracefully(self, mock_save):
         """Should return None on save error without raising."""

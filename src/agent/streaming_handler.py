@@ -138,6 +138,7 @@ class StreamingHandler:
         output = event.get("data", {}).get("output")
         if output and hasattr(output, "usage_metadata") and output.usage_metadata:
             self.usage_metadata = output.usage_metadata
+            logger.debug(f"STREAM - Captured usage_metadata: {self.usage_metadata}")
 
     def get_final_response(self) -> str:
         """Restituisce la risposta finale concatenata."""

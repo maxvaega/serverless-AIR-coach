@@ -45,6 +45,12 @@ def log_token_usage(
         return None
 
     try:
+        logger.debug(
+            f"TOKEN_LOGGER - Raw usage_metadata keys: {list(usage_metadata.keys())}"
+            + (f", input_token_details: {usage_metadata.get('input_token_details')}"
+               if "input_token_details" in usage_metadata else "")
+        )
+
         # Extract token counts from usage_metadata
         input_tokens = (
             usage_metadata.get("input_tokens")
@@ -62,7 +68,8 @@ def log_token_usage(
             or (input_tokens + output_tokens)
         )
         cached_tokens = (
-            usage_metadata.get("cached_tokens")
+            usage_metadata.get("input_token_details", {}).get("cache_read")
+            or usage_metadata.get("cached_tokens")
             or usage_metadata.get("cached_content_token_count")
             or 0
         )
