@@ -20,6 +20,7 @@ class StreamingHandler:
         self.tool_executed = False
         self.serialized_output = None
         self.message_id = message_id  # REQUIRED: Store for chunk injection
+        self.usage_metadata: Dict[str, Any] = {}  # Token usage from LLM response
     
     async def handle_stream_events(
         self, 
@@ -59,9 +60,16 @@ class StreamingHandler:
                 elif kind == "on_chat_model_stream":
                     async for chunk in self._handle_model_stream(event):
                         yield chunk
-                    
+
+                elif kind == "on_chat_model_end":
+                    self._handle_model_end(event)
+
         except Exception as e:
             logger.error(f"Errore nello streaming con controllo tool: {e}")
+            # Track rate limit errors for monitoring
+            from ..monitoring.rate_limit_monitor import is_rate_limited
+            if is_rate_limited(e):
+                self._rate_limit_error = str(e)
             yield f"data: {{'error': 'Errore nello streaming: {str(e)}'}}\n\n"
     
     def _reset_state(self):
@@ -70,6 +78,7 @@ class StreamingHandler:
         self.tool_records = []
         self.tool_executed = False
         self.serialized_output = None
+        self.usage_metadata = {}
     
     async def _handle_tool_start(self, event: Dict) -> AsyncGenerator[str, None]:
         """Gestisce l'evento di inizio esecuzione tool (logging only)."""
@@ -111,6 +120,9 @@ class StreamingHandler:
         """Gestisce l'evento di streaming del modello."""
         chunk = event["data"].get("chunk")
         if isinstance(chunk, AIMessageChunk):
+            # Capture usage_metadata from the chunk (typically on the last chunk)
+            if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                self.usage_metadata = chunk.usage_metadata
             content_text = chunk.text()
             if content_text:
                 self.response_chunks.append(content_text)
@@ -120,7 +132,14 @@ class StreamingHandler:
                     "message_id": self.message_id  # REQUIRED field
                 }
                 yield f"data: {json.dumps(ai_response)}\n\n"
-    
+
+    def _handle_model_end(self, event: Dict) -> None:
+        """Capture usage_metadata from the complete model response."""
+        output = event.get("data", {}).get("output")
+        if output and hasattr(output, "usage_metadata") and output.usage_metadata:
+            self.usage_metadata = output.usage_metadata
+            logger.debug(f"STREAM - Captured usage_metadata: {self.usage_metadata}")
+
     def get_final_response(self) -> str:
         """Restituisce la risposta finale concatenata."""
         return "".join([c for c in self.response_chunks if c])
@@ -136,3 +155,7 @@ class StreamingHandler:
     def get_serialized_output(self):
         """Restituisce l'ultimo output serializzato dei tool."""
         return self.serialized_output
+
+    def get_usage_metadata(self) -> Dict[str, Any]:
+        """Returns captured token usage metadata from the LLM response."""
+        return self.usage_metadata

@@ -50,6 +50,50 @@ INFO:     Started reloader process [31094] using StatReload
 - **[Technical Analysis](docs/TECNICAL.md)**: Engineering perspective - architecture, patterns, and implementation details
 - **[Testing Documentation](tests/README.md)**: Complete testing strategy, setup and usage with pytest
 
+## Monitoring (Phase 0)
+
+The project includes a monitoring toolkit for tracking token usage, cache effectiveness, costs, and rate limits.
+
+### Token Counter
+
+The `scripts/count_tokens.py` script counts real tokens in the knowledge base documents using the Google Generative AI SDK, and produces per-document breakdowns with cost estimates.
+
+```bash
+# Count tokens from local docs
+python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/
+
+# Count tokens from S3 (production)
+python scripts/count_tokens.py
+
+# Include cache probe to verify implicit caching
+python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/ --probe-cache
+```
+
+Full documentation: [scripts/COUNT_TOKENS.md](scripts/COUNT_TOKENS.md)
+
+### Runtime Token Logging
+
+Every request automatically logs token usage (input, output, cached) to the MongoDB `token_metrics` collection. Controlled by the `ENABLE_TOKEN_LOGGING` env var (default: `true`). Rate limit events (HTTP 429) are captured in `rate_limit_events`.
+
+### Monitoring Endpoint
+
+`GET /api/monitoring?days=30` returns an aggregated report with token usage, cache analysis, cost projections, rate limit events, and recommendations. Protected by Auth0 JWT authentication (same as `/api/stream_query`).
+
+```bash
+curl -H "Authorization: Bearer <jwt-token>" https://app.vercel.app/api/monitoring?days=7
+```
+
+### CLI Reports
+
+```bash
+# Cost report from MongoDB
+python scripts/calculate_costs.py --hours 168
+
+# Full monitoring report
+python scripts/monitoring_report.py --hours 24
+python scripts/monitoring_report.py --hours 24 --json
+```
+
 ## API Health Check Monitor
 
 The `monitor_api.py` script provides continuous monitoring of the API health endpoint in the production url. It performs automated health checks every 30 seconds, displaying success/failure status with timestamps and detailed error reporting. Run with `python monitor_api.py` to monitor API availability in real-time.
