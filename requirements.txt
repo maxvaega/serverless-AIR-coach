@@ -34,7 +34,7 @@ langsmith==0.3.8
 orjson==3.10.15
 packaging==24.2
 proto-plus==1.26.0
-protobuf==5.29.5
+protobuf==5.29.6
 pyasn1==0.6.2
 pyasn1_modules==0.4.1
 pycparser==2.22
