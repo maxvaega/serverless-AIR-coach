@@ -1,5 +1,4 @@
-from fastapi import FastAPI, HTTPException, APIRouter, Security, Request, Query, Depends
-from fastapi.security import APIKeyHeader
+from fastapi import FastAPI, HTTPException, APIRouter, Security, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -9,10 +8,8 @@ from src.rag import ask
 from src.update_docs import update_docs
 from src.s3_utils import create_prompt_file
 from src.auth import VerifyToken
-from src.env import MONITORING_API_KEY
 
 auth = VerifyToken()
-monitoring_api_key_header = APIKeyHeader(name="X-Monitoring-Key", auto_error=False)
 
 app = FastAPI(
     title='AIR Coach API',
@@ -173,8 +170,8 @@ async def update_docs_endpoint():
 
 @api_router.get("/monitoring")
 async def monitoring_endpoint(
-    hours: int = Query(default=24, ge=1, le=720),
-    api_key: str = Security(monitoring_api_key_header),
+    days: int = Query(default=30, ge=1, le=90, description="Number of days to look back"),
+    auth_result: dict = Security(auth.verify)
 ):
     """
     Monitoring dashboard endpoint.
@@ -182,20 +179,34 @@ async def monitoring_endpoint(
     Returns aggregated metrics: token usage, cache analysis, cost projections,
     rate limit events, and recommendations.
 
-    Protected by static API key via X-Monitoring-Key header.
-    If MONITORING_API_KEY is not set, the endpoint returns 403.
+    ## Authentication
 
-    Query params:
-        hours: Number of hours to look back (default: 24, max: 720)
+    **Required**: Bearer JWT token (same Auth0 authentication as /api/stream_query)
+
+    ## Query Parameters
+
+    - `days` (integer, optional): Number of days to look back (default: 30, min: 1, max: 90)
+
+    ## Response Format
+
+    Returns a JSON object with monitoring metrics including:
+    - Token usage statistics
+    - Cache analysis and effectiveness
+    - Cost analysis and projections
+    - Rate limit events
+    - System recommendations
+
+    ## Response Status Codes
+
+    - **200**: Report generated successfully
+    - **401/403**: Invalid or missing authentication token
+    - **422**: Invalid query parameters
+    - **500**: Internal server error
     """
-    # Verify API key
-    if not MONITORING_API_KEY:
-        raise HTTPException(status_code=403, detail="Monitoring endpoint not configured")
-
-    if not api_key or api_key != MONITORING_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid monitoring API key")
-
     try:
+        # Convert days to hours for internal functions
+        hours = days * 24
+
         from src.monitoring.dashboard import get_monitoring_report
         report = get_monitoring_report(hours=hours)
         return report

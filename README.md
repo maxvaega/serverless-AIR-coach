@@ -77,10 +77,10 @@ Every request automatically logs token usage (input, output, cached) to the Mong
 
 ### Monitoring Endpoint
 
-`GET /api/monitoring?hours=24` returns an aggregated report with token usage, cache analysis, cost projections, rate limit events, and recommendations. Protected by the `X-Monitoring-Key` header (set via `MONITORING_API_KEY` env var).
+`GET /api/monitoring?days=30` returns an aggregated report with token usage, cache analysis, cost projections, rate limit events, and recommendations. Protected by Auth0 JWT authentication (same as `/api/stream_query`).
 
 ```bash
-curl -H "X-Monitoring-Key: <key>" https://app.vercel.app/api/monitoring?hours=24
+curl -H "Authorization: Bearer <jwt-token>" https://app.vercel.app/api/monitoring?days=7
 ```
 
 ### CLI Reports

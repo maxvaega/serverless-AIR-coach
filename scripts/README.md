@@ -31,7 +31,7 @@ Il sistema e composto da tre livelli:
 | **Moduli runtime** | `src/monitoring/rate_limit_monitor.py` | Cattura errori 429 (rate limit) |
 | **Moduli runtime** | `src/monitoring/cache_monitor.py` | Analisi metriche di cache dalle risposte LLM |
 | **Moduli runtime** | `src/monitoring/dashboard.py` | Aggregazione metriche e raccomandazioni |
-| **Endpoint API** | `GET /api/monitoring` | Report via HTTP (protetto da API key) |
+| **Endpoint API** | `GET /api/monitoring` | Report via HTTP (protetto da JWT Auth0) |
 
 ### Flusso dati
 
@@ -54,9 +54,8 @@ Non sono necessarie dipendenze aggiuntive rispetto a quelle gia installate nel p
 | Variabile | Default | Descrizione |
 |-----------|---------|-------------|
 | `ENABLE_TOKEN_LOGGING` | `"true"` | Abilita/disabilita il logging dei token su MongoDB. Impostare a `"false"` per disabilitare |
-| `MONITORING_API_KEY` | `""` | API key richiesta per accedere all'endpoint `GET /api/monitoring`. Passata nell'header `X-Monitoring-Key` |
 
-Entrambe sono definite in `src/env.py` e leggono dal file `.env`.
+Definita in `src/env.py` e letta dal file `.env`.
 
 ---
 
@@ -303,30 +302,36 @@ Il report genera raccomandazioni basate sui dati:
 
 ## Endpoint API: GET /api/monitoring
 
-Endpoint HTTP che restituisce lo stesso report di `monitoring_report.py` in formato JSON. Protetto da API key.
+Endpoint HTTP che restituisce lo stesso report di `monitoring_report.py` in formato JSON. Protetto da autenticazione JWT Auth0.
 
 ### Richiesta
 
 ```
-GET /api/monitoring?hours=24
-Header: X-Monitoring-Key: <MONITORING_API_KEY>
+GET /api/monitoring?days=30
+Header: Authorization: Bearer <JWT_TOKEN>
 ```
 
 ### Parametri
 
 | Parametro | Tipo | Default | Vincoli | Descrizione |
 |-----------|------|---------|---------|-------------|
-| `hours` | int | `24` | 1-720 | Ore da analizzare |
+| `days` | int | `30` | 1-90 | Numero di giorni da analizzare (convertito internamente in ore) |
 
 ### Autenticazione
 
-L'endpoint richiede l'header `X-Monitoring-Key` con il valore della variabile `MONITORING_API_KEY`. Senza API key configurata (valore vuoto), l'endpoint e disabilitato e restituisce 403.
+L'endpoint richiede un JWT token Auth0 valido nell'header `Authorization: Bearer <token>`, utilizzando lo stesso meccanismo di autenticazione dell'endpoint `/api/stream_query`.
+
+Per ottenere un token JWT:
+1. Autenticarsi tramite Auth0 (stesso flusso di `/api/stream_query`)
+2. Includere il token nell'header `Authorization`
+
+Senza token valido, l'endpoint restituisce 401/403.
 
 ### Risposta
 
 ```json
 {
-  "period_hours": 24,
+  "period_hours": 720,
   "generated_at": "2025-01-15T10:30:00+00:00",
   "token_usage": {
     "total_requests": 150,
@@ -364,7 +369,10 @@ L'endpoint richiede l'header `X-Monitoring-Key` con il valore della variabile `M
 ### Esempio con curl
 
 ```bash
-curl -H "X-Monitoring-Key: la-tua-api-key" "https://your-domain/api/monitoring?hours=48"
+# Ottenere un token JWT tramite Auth0 (stesso processo di /api/stream_query)
+# Poi usarlo per richiedere il report di monitoraggio
+
+curl -H "Authorization: Bearer <your-jwt-token>" "https://your-domain/api/monitoring?days=7"
 ```
 
 ---
@@ -513,8 +521,10 @@ Nessun dato nella collezione `token_metrics` per il periodo richiesto. Verificar
 - Il server sia in esecuzione e riceva richieste
 - La connessione a MongoDB sia attiva
 
-### 403 sull'endpoint `/api/monitoring`
+### 401/403 sull'endpoint `/api/monitoring`
 
-La API key non corrisponde. Verificare che:
-- `MONITORING_API_KEY` sia configurata nel `.env` del server
-- L'header `X-Monitoring-Key` nella richiesta contenga lo stesso valore
+Il token JWT non e valido o mancante. Verificare che:
+- Il token JWT sia stato ottenuto correttamente tramite Auth0
+- L'header `Authorization: Bearer <token>` sia presente nella richiesta
+- Il token non sia scaduto
+- Il token abbia le autorizzazioni necessarie

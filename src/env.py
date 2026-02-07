@@ -42,7 +42,6 @@ class Settings(BaseSettings):
 
     # Monitoring Configuration
     ENABLE_TOKEN_LOGGING: bool = os.getenv("ENABLE_TOKEN_LOGGING", "true").lower() == "true"
-    MONITORING_API_KEY: str = os.getenv("MONITORING_API_KEY", "")
 
     class Config:
         env_file = ".env"
@@ -83,4 +82,3 @@ CACHE_DEBUG_LOGGING = settings.CACHE_DEBUG_LOGGING
 
 # Monitoring Configuration
 ENABLE_TOKEN_LOGGING = settings.ENABLE_TOKEN_LOGGING
-MONITORING_API_KEY = settings.MONITORING_API_KEY
