@@ -52,7 +52,7 @@ jobs:
         AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
         AUTH0_ISSUER: ${{ secrets.AUTH0_ISSUER }}
         # Optional configurations
-        FORCED_MODEL: "models/gemini-2.5-flash-lite"
+        FORCED_MODEL: ${{ secrets.FORCED_MODEL }}
         VERTEX_AI_REGION: europe-west8
         ENABLE_GOOGLE_CACHING: true
         CACHE_REGION: europe-west8
@@ -86,7 +86,7 @@ jobs:
         # Test Auth Token (for integration tests)
         TEST_AUTH_TOKEN: ${{ secrets.TEST_AUTH_TOKEN }}
         # Optional configurations
-        FORCED_MODEL: "models/gemini-2.5-flash-lite"
+        FORCED_MODEL: ${{ secrets.FORCED_MODEL }}
         VERTEX_AI_REGION: europe-west8
         ENABLE_GOOGLE_CACHING: true
         CACHE_REGION: europe-west8
