@@ -2,7 +2,7 @@
 
 ## Tech Stack
 - **Framework**: FastAPI + LangGraph agents
-- **Language**: Python 3.7+
+- **Language**: Python 3.10+
 - **LLM**: Google Gemini 3 Flash preview (europe-west8)
 - **Database**: MongoDB Atlas
 - **Storage**: AWS S3
