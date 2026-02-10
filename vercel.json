@@ -1,19 +1,13 @@
 {
-  "builds": [
-    {
-      "src": "run.py",
-      "use": "@vercel/python"
-    }
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/run.py" },
+    { "source": "/(.*)", "destination": "/run.py" }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "run.py" },
-    { "src": "/(.*)", "dest": "run.py" }
-  ],
-  "env": {
-      "PYTHONPATH": "."
-  },
   "functions": {
     "run.py": {
+      "runtime": "@vercel/python@4",
+      "maxDuration": 60,
       "excludeFiles": "{tests/**,.github/**,cloudflare/**,scripts/**,*.md,pytest.ini,requirements-dev.txt,.env.example,LICENSE}"
     }
   }
