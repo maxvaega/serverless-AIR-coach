@@ -14,7 +14,6 @@
   },
   "functions": {
     "run.py": {
-      "maxDuration": 60,
       "excludeFiles": "{tests/**,.github/**,cloudflare/**,scripts/**,*.md,pytest.ini,requirements-dev.txt,.env.example,LICENSE}"
     }
   }
