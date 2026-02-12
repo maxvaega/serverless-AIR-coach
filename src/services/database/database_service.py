@@ -1,4 +1,5 @@
 import pymongo
+from pymongo import ReturnDocument
 import logging
 from typing import Dict, List, Optional, Any
 import uuid
@@ -158,6 +159,25 @@ class MongoDBService(DatabaseInterface):
         result = self.db[collection].update_one({"_id": item_id}, {"$set": update_data})
         return result.modified_count > 0
     
+    def update_feedback(self, collection: str, item_id: str, feedback: str) -> Optional[Dict[str, Any]]:
+        """
+        Atomically update the feedback_user field on a document and return it.
+
+        Args:
+            collection: The collection to update in.
+            item_id: The _id of the document.
+            feedback: The feedback value ("positive" or "negative").
+
+        Returns:
+            The updated document, or None if not found.
+        """
+        doc = self.db[collection].find_one_and_update(
+            {"_id": item_id},
+            {"$set": {"feedback_user": feedback}},
+            return_document=ReturnDocument.AFTER,
+        )
+        return self._to_json_safe(doc) if doc else None
+
     def delete_item(self, collection: str, item_id: str) -> bool:
         """
         Delete an item from the specified collection.
