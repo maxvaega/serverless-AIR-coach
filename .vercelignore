@@ -1,0 +1,10 @@
+tests/
+.github/
+cloudflare/
+scripts/
+docs/
+*.md
+pytest.ini
+requirements-dev.txt
+.env.example
+LICENSE
