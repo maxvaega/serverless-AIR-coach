@@ -1,9 +1,10 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Security, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 import logging
 logger = logging.getLogger("uvicorn")
-from src.models import MessageRequest
+from src.models import MessageRequest, FeedbackRequest, ErrorResponse
 from src.auth import VerifyToken
 
 auth = VerifyToken()
@@ -32,6 +33,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    errors = exc.errors()
+    field = errors[0]["loc"][-1] if errors else "unknown"
+    return JSONResponse(
+        status_code=422,
+        content=ErrorResponse(
+            code="BAD_REQUEST",
+            message=f"Richiesta non valida: errore nel parametro {field}"
+        ).model_dump()
+    )
+
 
 #############################################
 # FastAPI Endpoints
@@ -213,6 +228,67 @@ async def monitoring_endpoint(
     except Exception as e:
         logger.error(f"Error generating monitoring report: {e}")
         raise HTTPException(status_code=500, detail="Error generating monitoring report")
+
+@api_router.post("/feedback_user")
+async def feedback_user_endpoint(
+    request: FeedbackRequest,
+    auth_result: dict = Security(auth.verify)
+):
+    """
+    Save user feedback (thumbs up/down) for a chat message.
+
+    Updates the `feedback_user` field on the MongoDB document identified by `messageId`.
+
+    ## Authentication
+
+    **Required**: Bearer JWT token (same Auth0 authentication as /api/stream_query)
+
+    ## Request Format
+
+    **Content-Type**: `application/json`
+
+    **Body**:
+    - `messageId` (string, required): MongoDB `_id` of the message
+    - `feedback` (string, required): `"positive"` or `"negative"`
+
+    ## Response Status Codes
+
+    - **200**: Feedback saved successfully (returns updated document)
+    - **401/403**: Invalid or missing authentication token
+    - **404**: Message not found
+    - **422**: Invalid request payload
+    - **500**: Internal server error
+    """
+    try:
+        from src.services.database.database_service import MongoDBService
+        from src.env import COLLECTION_NAME
+
+        db_service = MongoDBService()
+        updated_doc = db_service.update_feedback(
+            collection=COLLECTION_NAME,
+            item_id=request.messageId,
+            feedback=request.feedback,
+        )
+        if updated_doc is None:
+            return JSONResponse(
+                status_code=404,
+                content=ErrorResponse(
+                    code="NOT_FOUND",
+                    message=f"Messaggio non trovato: {request.messageId}"
+                ).model_dump()
+            )
+        return updated_doc
+
+    except Exception as e:
+        logger.error(f"Error updating feedback for message {request.messageId}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content=ErrorResponse(
+                code="INTERNAL_ERROR",
+                message="Errore interno del server"
+            ).model_dump()
+        )
+
 
 app.include_router(api_router) # for /api/ prefix
 

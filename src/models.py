@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal, List, Dict, Any, Optional
+from typing import Literal, List, Dict, Any, Optional, Union
 
 # Define request/response models
 
@@ -125,4 +125,15 @@ class SSEToolResult(BaseModel):
             }
         }
     )
+
+
+class FeedbackRequest(BaseModel):
+    messageId: str = Field(..., min_length=1, description="MongoDB _id del messaggio")
+    feedback: Literal["positive", "negative"] = Field(..., description="Feedback utente: 'positive' o 'negative'")
+
+
+class ErrorResponse(BaseModel):
+    type: Literal["error"] = "error"
+    code: str = Field(..., description="Codice errore (es. BAD_REQUEST, NOT_FOUND, INTERNAL_ERROR)")
+    message: str = Field(..., description="Descrizione errore leggibile")
 
