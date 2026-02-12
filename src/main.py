@@ -4,9 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 logger = logging.getLogger("uvicorn")
 from src.models import MessageRequest
-from src.rag import ask
-from src.update_docs import update_docs
-from src.s3_utils import create_prompt_file
 from src.auth import VerifyToken
 
 auth = VerifyToken()
@@ -129,6 +126,7 @@ async def stream_endpoint(
     - **500**: Internal server error
     """
     try:
+        from src.rag import ask
         token = auth_result.get('access_token') or auth_result.get('token')
         logger.info(f"Request received: \ntoken_len= {len(token)}\nmessage= {request.message}\nuserid= {request.userid}")
         stream_response = ask(request.message, request.userid, chat_history=True, user_data=True, token=token)
@@ -148,9 +146,11 @@ async def update_docs_endpoint():
     - Details for each document (title and last modified date)
     """
     try:
+        from src.update_docs import update_docs
+        from src.s3_utils import create_prompt_file
         update_result = update_docs()
         system_prompt = update_result["system_prompt"]
-        
+
         try:
             file = create_prompt_file(system_prompt)
         except Exception as file_error:
