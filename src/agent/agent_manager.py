@@ -1,10 +1,10 @@
 from typing import Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import create_agent
+from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 from ..env import FORCED_MODEL, HISTORY_LIMIT, VERTEX_AI_REGION, CACHE_DEBUG_LOGGING
 from ..tools import domanda_teoria
-from ..history_hooks import build_rolling_window_middleware
+from ..history_hooks import build_llm_input_window_hook
 from ..prompt_personalization import get_personalized_prompt_for_user, generate_thread_id
 import logging
 logger = logging.getLogger("uvicorn")
@@ -61,11 +61,10 @@ class AgentManager:
         )
         
         # Creazione agente
-        agent_executor = create_agent(
-            llm,
-            tools,
-            system_prompt=personalized_prompt,
-            middleware=[build_rolling_window_middleware(HISTORY_LIMIT)],
+        agent_executor = create_react_agent(
+            llm, tools,
+            prompt=personalized_prompt,
+            pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT),
             checkpointer=checkpointer,
         )
 
