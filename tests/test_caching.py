@@ -46,7 +46,7 @@ class TestAgentManagerCaching:
     """Test configurazione LLM con parametri caching"""
 
     @mock.patch('src.agent.agent_manager.ChatGoogleGenerativeAI')
-    @mock.patch('src.agent.agent_manager.create_react_agent')
+    @mock.patch('src.agent.agent_manager.create_agent')
     @mock.patch('src.agent.agent_manager.get_personalized_prompt_for_user')
     def test_llm_region_configuration(self, mock_prompt, mock_agent, mock_llm):
         """Test che l'LLM sia configurato con la region corretta"""
@@ -68,7 +68,7 @@ class TestAgentManagerCaching:
         assert call_kwargs['model'] == settings.FORCED_MODEL
 
     @mock.patch('src.agent.agent_manager.ChatGoogleGenerativeAI')
-    @mock.patch('src.agent.agent_manager.create_react_agent')
+    @mock.patch('src.agent.agent_manager.create_agent')
     @mock.patch('src.agent.agent_manager.get_personalized_prompt_for_user')
     def test_llm_caching_parameters(self, mock_prompt, mock_agent, mock_llm):
         """Test che l'LLM sia configurato con i parametri per il caching"""

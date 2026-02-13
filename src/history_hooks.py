@@ -1,4 +1,6 @@
-from typing import Any, Dict
+from typing import Awaitable, Callable
+
+from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
 
 from .env import HISTORY_LIMIT
 import logging
@@ -6,25 +8,26 @@ logger = logging.getLogger("uvicorn")
 from .utils_history import last_n_turns
 
 
-def build_llm_input_window_hook(max_turns: int = HISTORY_LIMIT):
+def build_rolling_window_middleware(max_turns: int = HISTORY_LIMIT):
     """
-    Crea un pre_model_hook che seleziona gli ultimi `max_turns` turni dalla history
-    del grafo e li passa al modello via 'llm_input_messages', senza modificare
-    'messages' nello stato del grafo.
+    Crea un middleware che seleziona gli ultimi `max_turns` turni dalla history
+    e li passa al modello, senza modificare 'messages' nello stato del grafo.
     """
 
-    def pre_model_hook(state: Dict[str, Any]) -> Dict[str, Any]:
-        messages = state.get("messages", [])
+    @wrap_model_call
+    async def rolling_window_middleware(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
+    ) -> ModelResponse:
+        messages = request.messages
         try:
             window = last_n_turns(messages, max_turns)
             logger.debug(
-                f"PRE_MODEL_HOOK - total={len(messages)} -> window={len(window)} turns={max_turns}"
+                f"ROLLING_WINDOW_MW - total={len(messages)} -> window={len(window)} turns={max_turns}"
             )
-            return {"llm_input_messages": window}
+            return await handler(request.override(messages=window))
         except Exception as e:
-            logger.error(f"pre_model_hook error: {e}")
-            return {"llm_input_messages": messages}
+            logger.error(f"rolling_window_middleware error: {e}")
+            return await handler(request)
 
-    return pre_model_hook
-
-
+    return rolling_window_middleware

@@ -123,7 +123,7 @@ class StreamingHandler:
             # Capture usage_metadata from the chunk (typically on the last chunk)
             if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
                 self.usage_metadata = chunk.usage_metadata
-            content_text = chunk.text()
+            content_text = chunk.text
             if content_text:
                 self.response_chunks.append(content_text)
                 ai_response = {

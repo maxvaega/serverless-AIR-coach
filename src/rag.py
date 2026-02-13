@@ -124,4 +124,4 @@ def _ask_streaming(agent_executor, config, query: str, user_id: str, chat_histor
 
 
 # Re-export for unit tests
-from .history_hooks import build_llm_input_window_hook
+from .history_hooks import build_rolling_window_middleware

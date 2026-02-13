@@ -100,10 +100,10 @@ The `monitor_api.py` script provides continuous monitoring of the API health end
 
 ## LangGraph Agent Notes
 
-- The agent is created per-request with `create_react_agent(model, tools, prompt=personalized_prompt, pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT), checkpointer=InMemorySaver())`.
+- The agent is created per-request with `create_agent(model, tools, system_prompt=personalized_prompt, middleware=[build_rolling_window_middleware(HISTORY_LIMIT)], checkpointer=InMemorySaver())`.
 - `personalized_prompt` concatenates user metadata into the system prompt each request; no `AIMessage` is added for user data.
 - `thread_id` is versioned per user and prompt version: `f"{userid}:v{prompt_version}"`.
-- No trimming on warm path. The rolling window is applied via `pre_model_hook` by setting `llm_input_messages`.
+- No trimming on warm path. The rolling window is applied via middleware by overriding `request.messages`.
 
 ## Changelog
 
