@@ -62,8 +62,7 @@ class AgentManager:
         
         # Creazione agente
         agent_executor = create_react_agent(
-            llm,
-            tools,
+            llm, tools,
             prompt=personalized_prompt,
             pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT),
             checkpointer=checkpointer,

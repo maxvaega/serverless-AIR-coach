@@ -1,9 +1,7 @@
 import pytest
 from langchain_core.messages import HumanMessage, AIMessage
-
 from src.history_hooks import build_llm_input_window_hook
 
-# Mark all tests in this file as unit tests (fast, mocked)
 pytestmark = pytest.mark.unit
 
 
@@ -14,5 +12,3 @@ def test_pre_model_hook_returns_llm_input_messages():
     assert "llm_input_messages" in update
     msgs = update["llm_input_messages"]
     assert len(msgs) == 1 and isinstance(msgs[0], HumanMessage) and msgs[0].content == "u2"
-
-
