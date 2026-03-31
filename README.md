@@ -1,113 +1,121 @@
-# AIR Coach API - v2.2
+<div align="center">
 
-AIR Coach API is a FastAPI-based application designed for handling chatbot interactions with AI agents powered by LangGraph.
+# AIR Coach API
 
-## Features
+**AI-powered assistant for skydiving instructor training**
 
-- **Streaming Query Endpoint**: Handle query requests and stream responses
-- **Docs update Endpoint**: refreshes the docs in cache to updated the LLM context
-- **AWS S3 Context load**: dinamically loads context from .md files hosted in AWS S3
-- **User information**: reads data from Auth0 and adds it to the system prompt (not as chat messages)
-- **LLM Model**: Gemini 3 Flash
-- **LangGraph Integration**: AI agents with custom tools for quiz management
-- **Quiz Management Tool**: `domanda_teoria` tool for retrieving and searching quiz questions
- - **Rolling conversation window (pre_model_hook)**: the LLM only receives the last `HISTORY_LIMIT` turns; graph state `messages` is never trimmed
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-agentic-1C1C1C)](https://langchain-ai.github.io/langgraph/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Requirements
+*Real-world AI agent for a specialized, safety-critical domain — skydiving instructor qualification.*
 
-- Python 3.7+
-- FastAPI
-- Langchain
-- LangGraph
-- MongoDB
-- others
+</div>
 
-## Environment Variables
+---
 
-To set environment variables, copy the file [.env.example](.env.example) and replace the keys
+## What is AIR Coach?
 
-# Local Test
+AIR Coach is a conversational AI agent designed to help skydiving instructors (AFF/tandem) prepare for theoretical exams and review safety protocols. It answers quiz questions, explains maneuvers, and adapts dynamically to the instructor's training progress.
 
-## FastAPI
+Built as a **serverless FastAPI backend** deployed on **AWS Lambda**, it demonstrates how LangGraph agents can be deployed in production with real users, real data, and real domain constraints.
 
-#uvicorn run:app --reload
-```sh
-python run.py
+---
 
-# Example output
-2025-02-07 11:32:43,980 [INFO] Connected to MongoDB successfully.
-INFO:     Started server process [67877]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
-INFO:     Started reloader process [31094] using StatReload
+## Architecture
 
 ```
+┌─────────────────────────────────────────────────────────┐
+│                    AWS Lambda (FastAPI)                   │
+│                                                           │
+│  ┌─────────────┐    ┌──────────────┐    ┌─────────────┐ │
+│  │  Auth0 JWT  │ -> │  LangGraph   │ -> │  Gemini 3   │ │
+│  │  User info  │    │  Agent Graph │    │  Flash LLM  │ │
+│  └─────────────┘    └──────┬───────┘    └─────────────┘ │
+│                            │                              │
+│                    ┌───────▼────────┐                    │
+│                    │    MongoDB     │                    │
+│                    │  Quiz DB +     │                    │
+│                    │  Chat History  │                    │
+│                    └───────────────┘                    │
+│                                                           │
+│  Context: .md files loaded dynamically from AWS S3       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Stack:**
+- **Runtime**: Python 3.10, FastAPI, Mangum (ASGI → Lambda)
+- **AI**: LangGraph (stateful agent graph), Gemini 3 Flash
+- **Data**: MongoDB (quiz questions, conversation state)
+- **Auth**: Auth0 JWT validation (user context in system prompt)
+- **Context**: AWS S3 (.md knowledge base, hot-reloadable)
+
+**Key design decisions:**
+- Rolling conversation window (`pre_model_hook`) — only last N turns sent to LLM, keeping costs low
+- `domanda_teoria` tool for structured quiz retrieval and semantic search
+- User identity injected into system prompt (not as chat messages)
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.10+
+- MongoDB instance (local or Atlas)
+- Google Gemini API key
+- Auth0 account (for user auth)
+- AWS account (for Lambda deployment and S3)
+
+### Local Development
+
+```bash
+git clone https://github.com/maxvaega/serverless-AIR-coach
+cd serverless-AIR-coach
+pip install -r requirements.txt
+cp .env.example .env  # add your keys
+python run.py
+```
+
+Server starts at `http://127.0.0.1:8080`.
+
+### Environment Variables
+
+See [.env.example](.env.example) for the full list. Key variables:
+
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | Google Generative AI API key |
+| `MONGODB_URI` | MongoDB connection string |
+| `AUTH0_DOMAIN` | Auth0 domain for JWT validation |
+| `S3_BUCKET` | S3 bucket for knowledge base .md files |
+| `HISTORY_LIMIT` | Max conversation turns sent to LLM |
+
+---
 
 ## Documentation
 
-- **[Functional Analysis](docs/FUNCTIONAL.md)**: Business and product perspective - features, use cases, and end-user flows
-- **[Technical Analysis](docs/TECNICAL.md)**: Engineering perspective - architecture, patterns, and implementation details
-- **[Testing Documentation](tests/README.md)**: Complete testing strategy, setup and usage with pytest
+- **[Functional Analysis](docs/FUNCTIONAL.md)** — features, use cases, user flows
+- **[Technical Analysis](docs/TECNICAL.md)** — architecture, patterns, implementation
+- **[Testing](tests/README.md)** — testing strategy, pytest setup
 
-## Monitoring (Phase 0)
+---
 
-The project includes a monitoring toolkit for tracking token usage, cache effectiveness, costs, and rate limits.
+## Monitoring
 
-### Token Counter
+A built-in monitoring toolkit tracks:
+- Token usage per session
+- Knowledge base cache effectiveness
+- API cost estimates
+- Rate limit exposure
 
-The `scripts/count_tokens.py` script counts real tokens in the knowledge base documents using the Google Generative AI SDK, and produces per-document breakdowns with cost estimates.
+See `scripts/count_tokens.py` for the token analyzer.
 
-```bash
-# Count tokens from local docs
-python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/
+---
 
-# Count tokens from S3 (production)
-python scripts/count_tokens.py
+## Author
 
-# Include cache probe to verify implicit caching
-python scripts/count_tokens.py --local ../Knowledge-AIR-Coach/docs/ --probe-cache
-```
+**Massimo Vaega** · [LinkedIn](https://www.linkedin.com/in/massimoolivieri/) · [GitHub](https://github.com/maxvaega)
 
-Full documentation: [scripts/COUNT_TOKENS.md](scripts/COUNT_TOKENS.md)
-
-### Runtime Token Logging
-
-Every request automatically logs token usage (input, output, cached) to the MongoDB `token_metrics` collection. Controlled by the `ENABLE_TOKEN_LOGGING` env var (default: `true`). Rate limit events (HTTP 429) are captured in `rate_limit_events`.
-
-### Monitoring Endpoint
-
-`GET /api/monitoring?days=30` returns an aggregated report with token usage, cache analysis, cost projections, rate limit events, and recommendations. Protected by Auth0 JWT authentication (same as `/api/stream_query`).
-
-```bash
-curl -H "Authorization: Bearer <jwt-token>" https://app.vercel.app/api/monitoring?days=7
-```
-
-### CLI Reports
-
-```bash
-# Cost report from MongoDB
-python scripts/calculate_costs.py --hours 168
-
-# Full monitoring report
-python scripts/monitoring_report.py --hours 24
-python scripts/monitoring_report.py --hours 24 --json
-```
-
-## API Health Check Monitor
-
-The `monitor_api.py` script provides continuous monitoring of the API health endpoint in the production url. It performs automated health checks every 30 seconds, displaying success/failure status with timestamps and detailed error reporting. Run with `python monitor_api.py` to monitor API availability in real-time.
-
-## LangGraph Agent Notes
-
-- The agent is created per-request with `create_react_agent(model, tools, prompt=personalized_prompt, pre_model_hook=build_llm_input_window_hook(HISTORY_LIMIT), checkpointer=InMemorySaver())`.
-- `personalized_prompt` concatenates user metadata into the system prompt each request; no `AIMessage` is added for user data.
-- `thread_id` is versioned per user and prompt version: `f"{userid}:v{prompt_version}"`.
-- No trimming on warm path. The rolling window is applied via pre_model_hook which returns `llm_input_messages`.
-
-## Changelog
-
-- 2025/08: new tool domanda_teoria to output a json with questions from the db
-- 2025/09: rolling window via pre_model_hook, prompt personalization in system prompt, versioned thread_id, no trimming of graph state in warm path
-- 2025/09: refactoring file names, logging and env variables. run.py as an entrypoint and fastapi logic as an src.main.
-- 2025/09: moved inference to europe-west8 (Milan) + caching in Gemini
+*AI Discovery Leader — building AI agents that actually work in production.*
