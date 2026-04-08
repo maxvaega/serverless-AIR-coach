@@ -43,7 +43,9 @@ class AgentManager:
         # Configurazione ottimizzata per caching implicito con region unificata
         llm = ChatGoogleGenerativeAI(
             model=model,
-            thinking_level="low", #Solo per Gemini 3
+            # thinking_level omesso: il default per Gemini 3 è "high" e funziona correttamente.
+            # I livelli bassi ("low"/"minimal") causano bug server-side 500 su grandi contesti
+            # + function calling per thought signatures malformate. Vedi ERROR.md per dettagli.
             temperature=0.7,
             # CRITICO: Stessa region per inferenza e cache per massimizzare cache hits
             location=VERTEX_AI_REGION,  # "europe-west8"
@@ -74,10 +76,13 @@ class AgentManager:
             logger.info("Google Cloud implicit caching enabled for LLM calls")
         
         # Configurazione thread
+        # NB: recursion_limit DEVE essere top-level (LangGraph ignora valori sotto "configurable").
+        # Valore 10: con pre_model_hook come nodo separato, ogni ciclo richiede 3 step
+        # (pre_model_hook → agent → tool), quindi 10 permette 3 cicli completi.
         config = {
+            "recursion_limit": 10,
             "configurable": {
-                "thread_id": generate_thread_id(user_id, prompt_version), 
-                "recursion_limit": 2
+                "thread_id": generate_thread_id(user_id, prompt_version),
             }
         }
         
