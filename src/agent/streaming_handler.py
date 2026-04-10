@@ -65,7 +65,12 @@ class StreamingHandler:
                     self._handle_model_end(event)
 
         except Exception as e:
-            logger.error(f"Errore nello streaming con controllo tool: {e}")
+            import traceback
+            # Esponi l'errore originale quando mascherato (es. Gemini 500 → TypeError chain)
+            original = e.__cause__ or e.__context__
+            if original:
+                logger.error(f"Errore originale (mascherato): {type(original).__name__}: {original}")
+            logger.error(f"Errore nello streaming con controllo tool: {e}\n{traceback.format_exc()}")
             # Track rate limit errors for monitoring
             from ..monitoring.rate_limit_monitor import is_rate_limited
             if is_rate_limited(e):
