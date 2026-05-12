@@ -1,0 +1,22 @@
+[
+  {
+    "id": "q1",
+    "question": "Spiegami in modo semplice cosa è la VNE (Velocity Never Exceed) di un paracadute planante."
+  },
+  {
+    "id": "q2",
+    "question": "A quale quota minima un allievo dovrebbe aprire il paracadute principale?"
+  },
+  {
+    "id": "q3",
+    "question": "Quali fattori meteorologici devo controllare prima di un lancio?"
+  },
+  {
+    "id": "q4",
+    "question": "Cosa significa 'corpo stabile' in caduta libera e perché è importante?"
+  },
+  {
+    "id": "q5",
+    "question": "Dammi tre consigli pratici per migliorare la mia precisione di atterraggio."
+  }
+]
