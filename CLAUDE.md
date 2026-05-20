@@ -3,7 +3,7 @@
 ## Tech Stack
 - **Framework**: FastAPI + LangGraph agents
 - **Language**: Python 3.10+
-- **LLM**: Google Gemini 3 Flash preview (europe-west8)
+- **LLM**: DeepSeek V4 Flash via OpenRouter (auto-routing, sticky cache)
 - **Database**: MongoDB Atlas
 - **Storage**: AWS S3
 - **Auth**: Auth0 JWT

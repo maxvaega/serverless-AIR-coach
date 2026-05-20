@@ -8,7 +8,7 @@ from typing import AsyncGenerator, Optional, Union
 
 from langchain_core.messages import HumanMessage
 
-from .env import FORCED_MODEL, VERTEX_AI_REGION, CACHE_DEBUG_LOGGING
+from .env import FORCED_MODEL, CACHE_DEBUG_LOGGING
 from .utils import get_combined_docs, build_system_prompt, ensure_prompt_initialized
 from .agent.agent_manager import AgentManager
 from .agent.state_manager import _get_checkpointer
@@ -60,7 +60,7 @@ def ask(
     initialize_agent_state()
 
     if CACHE_DEBUG_LOGGING:
-        log_request_context(user_id, FORCED_MODEL, VERTEX_AI_REGION)
+        log_request_context(user_id, FORCED_MODEL)
 
     checkpointer = _get_checkpointer()
     agent_executor, config, prompt_version = AgentManager.create_agent(

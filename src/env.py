@@ -8,14 +8,11 @@ from functools import lru_cache
 load_dotenv(override=True)
 
 class Settings(BaseSettings):
-    # LLM Configuration
-    GOOGLE_API_KEY: str = os.getenv('GOOGLE_API_KEY', '')
-    FORCED_MODEL: str = os.getenv("FORCED_MODEL", "models/gemini-3-flash-preview")  # Modello LLM forzato se variabile non presente
+    # LLM Configuration (DeepSeek via OpenRouter)
+    OPENROUTER_API_KEY: str = os.getenv('OPENROUTER_API_KEY', '')
+    OPENROUTER_BASE_URL: str = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
+    FORCED_MODEL: str = os.getenv("FORCED_MODEL", "deepseek/deepseek-v4-flash")  # Modello LLM forzato se variabile non presente
 
-    # Google Cloud Regional Configuration
-    VERTEX_AI_REGION: str = os.getenv("VERTEX_AI_REGION", "europe-west8")  # Milano - region per inferenza Gemini
-    ENABLE_GOOGLE_CACHING: bool = os.getenv("ENABLE_GOOGLE_CACHING", "true").lower() == "true"
-    CACHE_REGION: str = os.getenv("CACHE_REGION", "europe-west8")  # Stessa region per massimizzare cache hits
     CACHE_DEBUG_LOGGING: bool = os.getenv("CACHE_DEBUG_LOGGING", "false").lower() == "true"
     
     # MongoDB Configuration
@@ -56,7 +53,8 @@ def get_settings():
 settings = Settings()
 
 # Backward compatibility - keep existing variable names for gradual migration
-GOOGLE_API_KEY = settings.GOOGLE_API_KEY
+OPENROUTER_API_KEY = settings.OPENROUTER_API_KEY
+OPENROUTER_BASE_URL = settings.OPENROUTER_BASE_URL
 URI = settings.URI
 DATABASE_NAME = settings.DATABASE_NAME
 COLLECTION_NAME = settings.COLLECTION_NAME
@@ -74,10 +72,6 @@ auth0_algorithms = settings.auth0_algorithms
 FORCED_MODEL = settings.FORCED_MODEL
 HISTORY_LIMIT = settings.HISTORY_LIMIT
 
-# Google Cloud Regional Configuration
-VERTEX_AI_REGION = settings.VERTEX_AI_REGION
-ENABLE_GOOGLE_CACHING = settings.ENABLE_GOOGLE_CACHING
-CACHE_REGION = settings.CACHE_REGION
 CACHE_DEBUG_LOGGING = settings.CACHE_DEBUG_LOGGING
 
 # Monitoring Configuration

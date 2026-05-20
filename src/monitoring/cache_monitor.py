@@ -5,15 +5,40 @@ from datetime import datetime
 logger = logging.getLogger("uvicorn")
 
 
-def log_cache_metrics(response: Any) -> Dict[str, Any]:
+def _extract_cached_tokens(usage: Any) -> int:
+    """Estrae i token cached da usage_metadata di LangChain ChatOpenAI.
+
+    OpenRouter forwarda lo schema OpenAI-compat: ``usage.prompt_tokens_details.cached_tokens``.
+    LangChain lo normalizza in ``usage_metadata.input_token_details.cache_read``.
     """
-    Analizza e logga le metriche di caching da una response di Google Cloud.
+    if isinstance(usage, dict):
+        details = usage.get("input_token_details") or {}
+        if isinstance(details, dict):
+            value = details.get("cache_read")
+            if value:
+                return value
+        return usage.get("cached_tokens", 0) or 0
 
-    Args:
-        response: Response object da ChatGoogleGenerativeAI
+    details = getattr(usage, "input_token_details", None)
+    if isinstance(details, dict):
+        value = details.get("cache_read")
+        if value:
+            return value
+    return getattr(usage, "cached_tokens", 0) or 0
 
-    Returns:
-        Dict con metriche di cache (cached_tokens, total_tokens, cache_ratio)
+
+def _extract_total_tokens(usage: Any) -> int:
+    if isinstance(usage, dict):
+        return usage.get("total_tokens", 0) or 0
+    return getattr(usage, "total_tokens", 0) or 0
+
+
+def log_cache_metrics(response: Any) -> Dict[str, Any]:
+    """Analizza e logga le metriche di caching dalla response LLM.
+
+    Compatibile con LangChain ``ChatOpenAI`` (OpenRouter/DeepSeek): legge
+    ``usage_metadata.input_token_details.cache_read`` o, in fallback,
+    ``response_metadata.usage.cached_tokens``.
     """
     metrics = {
         "cached_tokens": 0,
@@ -23,13 +48,10 @@ def log_cache_metrics(response: Any) -> Dict[str, Any]:
     }
 
     try:
-        # Verifica se la response ha usage_metadata (Vertex AI)
         if hasattr(response, 'usage_metadata') and response.usage_metadata:
             usage = response.usage_metadata
-
-            # Estrai token cached (se disponibili)
-            cached_tokens = getattr(usage, 'cached_content_token_count', 0) or 0
-            total_tokens = getattr(usage, 'total_token_count', 0) or 0
+            cached_tokens = _extract_cached_tokens(usage)
+            total_tokens = _extract_total_tokens(usage)
 
             metrics["cached_tokens"] = cached_tokens
             metrics["total_tokens"] = total_tokens
@@ -37,27 +59,26 @@ def log_cache_metrics(response: Any) -> Dict[str, Any]:
             if total_tokens > 0:
                 cache_ratio = cached_tokens / total_tokens
                 metrics["cache_ratio"] = cache_ratio
-
-                # Log metriche cache
                 logger.info(
                     f"CACHE_METRICS - Hit ratio: {cache_ratio:.2%}, "
                     f"Cached tokens: {cached_tokens}, Total tokens: {total_tokens}"
                 )
-
-                # Log significativo solo se ci sono cache hits
                 if cached_tokens > 0:
                     savings_percent = cache_ratio * 100
                     logger.info(f"CACHE_SAVINGS - Token savings: {savings_percent:.1f}%")
             else:
                 logger.debug("CACHE_METRICS - No token count available in response")
 
-        # Verifica alternative per LangChain response structure
         elif hasattr(response, 'response_metadata'):
             metadata = response.response_metadata
             if 'usage' in metadata:
                 usage = metadata['usage']
                 total_tokens = usage.get('total_tokens', 0)
-                cached_tokens = usage.get('cached_tokens', 0)
+                cached_tokens = (
+                    usage.get('cached_tokens')
+                    or (usage.get('prompt_tokens_details') or {}).get('cached_tokens', 0)
+                    or 0
+                )
 
                 metrics["cached_tokens"] = cached_tokens
                 metrics["total_tokens"] = total_tokens
@@ -76,19 +97,10 @@ def log_cache_metrics(response: Any) -> Dict[str, Any]:
     return metrics
 
 
-def log_request_context(user_id: str, model: str, region: str) -> None:
-    """
-    Logga il contesto della richiesta per tracciare configurazione caching.
-
-    Args:
-        user_id: ID utente
-        model: Modello utilizzato
-        region: Region di Vertex AI
-    """
+def log_request_context(user_id: str, model: str) -> None:
+    """Logga il contesto della richiesta (user + model) per debug cache."""
     try:
-        logger.info(
-            f"CACHE_CONTEXT - User: {user_id}, Model: {model}, Region: {region}"
-        )
+        logger.info(f"CACHE_CONTEXT - User: {user_id}, Model: {model}")
     except Exception as e:
         logger.error(f"CACHE_CONTEXT - Error logging request context: {e}")
 

@@ -1,8 +1,14 @@
 from typing import Optional
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
-from ..env import FORCED_MODEL, HISTORY_LIMIT, VERTEX_AI_REGION, CACHE_DEBUG_LOGGING
+from ..env import (
+    FORCED_MODEL,
+    HISTORY_LIMIT,
+    OPENROUTER_API_KEY,
+    OPENROUTER_BASE_URL,
+    CACHE_DEBUG_LOGGING,
+)
 from ..tools import domanda_teoria
 from ..history_hooks import build_llm_input_window_hook
 from ..prompt_personalization import get_personalized_prompt_for_user, generate_thread_id
@@ -35,21 +41,21 @@ class AgentManager:
         Returns:
             Tupla (agent_executor, config, prompt_version)
         """
-        # Configurazione LLM con region unificata per caching implicito
         model = FORCED_MODEL
         logger.info(f"Selected LLM model: {model}")
-        logger.info(f"Using Vertex AI region: {VERTEX_AI_REGION}")
 
-        # Configurazione ottimizzata per caching implicito con region unificata
-        llm = ChatGoogleGenerativeAI(
+        # DeepSeek via OpenRouter. Headers stabili + nessun pin di provider:
+        # OpenRouter applica sticky routing entro la sessione mantenendo caldo
+        # il cache prefix-match di DeepSeek (automatico lato provider).
+        llm = ChatOpenAI(
             model=model,
-            # thinking_level omesso: il default per Gemini 3 è "high" e funziona correttamente.
-            # I livelli bassi ("low"/"minimal") causano bug server-side 500 su grandi contesti
-            # + function calling per thought signatures malformate. Vedi ERROR.md per dettagli.
+            api_key=OPENROUTER_API_KEY,
+            base_url=OPENROUTER_BASE_URL,
             temperature=0.7,
-            # CRITICO: Stessa region per inferenza e cache per massimizzare cache hits
-            location=VERTEX_AI_REGION,  # "europe-west8"
-            # Parametri per ottimizzare caching implicito (automatico in Vertex AI)
+            default_headers={
+                "HTTP-Referer": "https://github.com/maxvaega/serverless-AIR-coach",
+                "X-Title": "AIR Coach",
+            },
         )
         
         # Tools disponibili
@@ -70,11 +76,13 @@ class AgentManager:
             checkpointer=checkpointer,
         )
 
-        # Log configurazione caching
         if CACHE_DEBUG_LOGGING:
-            logger.info(f"Caching configuration: region={VERTEX_AI_REGION}")
-            logger.info("Google Cloud implicit caching enabled for LLM calls")
-        
+            logger.info(
+                "OpenRouter routing: auto (no provider pin). "
+                "DeepSeek prefix caching is automatic provider-side."
+            )
+
+
         # Configurazione thread
         # NB: recursion_limit DEVE essere top-level (LangGraph ignora valori sotto "configurable").
         # Valore 10: con pre_model_hook come nodo separato, ogni ciclo richiede 3 step
